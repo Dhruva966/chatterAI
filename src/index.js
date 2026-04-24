@@ -13,5 +13,4 @@ setupMediaStreamServer(server);
 
 server.listen(PORT, () => {
   logger.info({ port: PORT, env: process.env.NODE_ENV }, 'chatter server started');
-  logger.info('First step: run `npm run spike` to verify ElevenLabs/Twilio mulaw compatibility');
 });
