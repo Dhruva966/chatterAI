@@ -1,4 +1,28 @@
 
+## Documentation — fetch these before building anything
+
+Before writing any code or making architecture decisions for this project,
+fetch and read the relevant documentation. Do not rely solely on training
+knowledge — these APIs evolve and the docs are the source of truth.
+
+| What | URL | When to fetch |
+|------|-----|---------------|
+| Deepgram home | https://developers.deepgram.com/home | Any Deepgram change |
+| Deepgram Voice Agent API | https://developers.deepgram.com/docs/voice-agent | Changing agent config, audio format, event types |
+| Deepgram STT streaming | https://developers.deepgram.com/docs/getting-started-with-live-streaming-audio | STT model params, endpointing |
+| ElevenLabs Agents | https://elevenlabs.io/docs/eleven-agents/overview | If switching to ElevenLabs agent |
+| ElevenLabs TTS API | https://elevenlabs.io/docs/api-reference/text-to-speech | TTS format, Flash v2, output_format param |
+| Twilio Media Streams | https://www.twilio.com/docs/voice/media-streams | Audio framing, WS message format, streamSid |
+| Twilio Programmable Voice | https://www.twilio.com/docs/voice/twiml | TwiML verbs, conference, gather |
+| Twilio Conference | https://www.twilio.com/docs/voice/api/conference-resource | Participant API, status callbacks |
+
+**Rule:** If a task touches Deepgram, ElevenLabs, or Twilio — fetch the relevant
+doc page first with WebFetch. Configs, event names, and audio format parameters
+change frequently. A wrong format (e.g. wrong mulaw sample rate) silently breaks
+audio with no error. Always verify against live docs.
+
+---
+
 ## Skill routing
 
 When the user's request matches an available skill, invoke it via the Skill tool. The

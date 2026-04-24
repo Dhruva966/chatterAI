@@ -166,6 +166,40 @@ range, see all wake word triggers, confirm whether they were intentional.
 
 ---
 
+## ADR-009: Switched to Deepgram Voice Agent + Gemini 2.5 Flash (2026-04-24)
+
+**Decision:** Replace the 3-API pipeline (Deepgram STT → Claude → ElevenLabs TTS)
+with the Deepgram Voice Agent — a single bidirectional WebSocket that handles
+STT (Deepgram Flux), LLM (Gemini 2.5 Flash), and TTS (Deepgram Aura) internally.
+
+**Why:**
+- Simpler: one WebSocket instead of three separate API calls per query
+- Eliminates ElevenLabs/Twilio mulaw compatibility as a P0 blocker
+- Gemini 2.5 Flash preferred for demos (lower cost, user's key)
+- Deepgram Aura TTS output format known-compatible with agent's 24kHz PCM output
+
+**Audio transcoding required (ADR-009 carries this):**
+- Twilio sends mulaw 8kHz → must transcode to linear16 48kHz for Deepgram Agent input
+- Deepgram Agent sends linear16 24kHz → must transcode to mulaw 8kHz for Twilio injection
+- Implemented in src/audio.js (G.711 mulaw codec + linear interpolation resampling)
+
+**Wake word behavior change:**
+- Old: explicit "hey chatter" transcript match → trigger Claude call
+- New: Deepgram Agent always listening; prompt instructs it to only respond when
+  addressed as "Chatter" or "Hey Chatter". LLM-level gate, not audio-level.
+- Acceptable for demos. Will tune if false-positive rate is too high.
+
+**Web search:**
+- Kept in EXA_API_KEY / src/llm.js for explicit tool calls
+- Deepgram Voice Agent doesn't expose web search as a native tool call yet
+- TODO: wire Exa as a function_call in the agent's `think.functions` config
+  so Gemini can invoke it. See Deepgram Voice Agent function calling docs.
+
+**Files changed:** src/agent.js (new), src/audio.js (new), src/conference.js (rewrite)
+**Files now optional:** src/llm.js, src/tts.js, src/stt.js (kept for fallback/future)
+
+---
+
 ## Open decisions (unresolved as of 2026-04-24)
 
 1. **Approach B fallback architecture** — if iOS 3-way carrier merge fails on
