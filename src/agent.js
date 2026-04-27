@@ -1,111 +1,103 @@
 require('dotenv').config();
 const WebSocket = require('ws');
-const Exa = require('exa-js').default;
-const { twilioToAgent, agentToTwilio, chunk } = require('./audio');
 const logger = require('./logger');
-
-const exa = new Exa(process.env.EXA_API_KEY);
+const { buildAgentSystemPrompt } = require('./agent-configs');
 
 const DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const TWILIO_FRAME_BYTES = 160; // 20ms mulaw frame for injection back to Twilio
 
-const CHATTER_PROMPT = `You are Chatter, an AI assistant participating in a live phone call between two people.
-You can hear the full conversation.
+const MARK_COMPLETE_FN = {
+  name: 'mark_complete',
+  description: 'Call this when the task is done, voicemail was left, or it cannot be completed. Always call this to end the call.',
+  parameters: {
+    type: 'object',
+    properties: {
+      result: {
+        type: 'string',
+        description: 'Brief summary of what was accomplished or why it failed',
+      },
+    },
+    required: ['result'],
+  },
+};
 
-CRITICAL: Only respond when someone explicitly addresses you as "Chatter" or "Hey Chatter".
-If people are talking to each other and not to you, stay completely silent — do not respond.
-
-When you do respond:
-- Be concise. Spoken answers only — 1 to 3 sentences max.
-- No markdown, no lists, no formatting. Plain speech only.
-- If you need to look something up, say so briefly while you retrieve it.
-- Never repeat back the question. Just answer.
-
-You are a helpful research assistant. Answer factual questions, give context, look things up.`;
-
-async function webSearch(query) {
-  const start = Date.now();
-  try {
-    const result = await exa.searchAndContents(query, {
-      type: 'fast',
-      numResults: 3,
-      highlights: { numSentences: 3, highlightsPerUrl: 2 },
-    });
-    const results = result.results || [];
-    const text = results.map(r => {
-      const highlights = r.highlights?.join(' ') || r.text?.slice(0, 400) || '';
-      return `${r.title}: ${highlights}`;
-    }).join('\n\n');
-    logger.info({ latency_ms: Date.now() - start, results: results.length }, 'exa search complete');
-    return text || 'No results found.';
-  } catch (err) {
-    logger.error({ err: err.message }, 'exa search failed');
-    return 'Search unavailable.';
+function buildGreeting(agentType) {
+  switch (agentType) {
+    case 'food_ordering':          return "Hi! I'd like to place an order for pickup, please.";
+    case 'appointment_booking':    return "Hi, I'd like to book an appointment, please.";
+    case 'general_customer_service': return "Hi, I'm calling to get some help with an issue. Could you assist me?";
+    case 'insurance_calls':        return "Hi, I'm calling about my insurance policy. Could I speak with someone who can help me?";
+    default:                       return "Hi, I have a quick request. Could you help me with that?";
   }
 }
 
-/**
- * DeepgramAgent wraps the Deepgram Voice Agent WebSocket for one Chatter bot leg.
- *
- * The agent handles STT (Deepgram Flux), LLM (Gemini 2.5 Flash), and TTS (Deepgram Aura)
- * in a single bidirectional WebSocket connection.
- *
- * Audio in:  linear16 48kHz (converted from Twilio's mulaw 8kHz via audio.js)
- * Audio out: linear16 24kHz (converted back to mulaw 8kHz for Twilio injection)
- *
- * @param {function} onAudioOut  - called with Buffer[] of mulaw 8kHz frames to inject into Twilio
- * @param {function} onAgentText - called with string (agent's response text, for logging/transcript)
- * @param {function} onUserText  - called with string (what user said, for transcript)
- */
-class DeepgramAgent {
-  constructor(onAudioOut, onAgentText, onUserText) {
-    this.onAudioOut = onAudioOut;
-    this.onAgentText = onAgentText;
-    this.onUserText = onUserText;
-    this.ws = null;
-    this.ready = false;
-    this.agentSpeaking = false;
-    this._pcmBuffer = Buffer.alloc(0); // accumulate partial PCM output from agent
+class OutboundAgent {
+  constructor({ taskId, description, phoneNumber, agentType = 'generic', agentMode = null, userContext = null, onAudioOut, onMarkComplete, onAgentText, onUserText }) {
+    this.taskId         = taskId;
+    this.description    = description;
+    this.phoneNumber    = phoneNumber;
+    this.agentType      = agentType;
+    this.agentMode      = agentMode;
+    this.userContext    = userContext;
+    this.onAudioOut     = onAudioOut;
+    this.onMarkComplete = onMarkComplete;
+    this.onAgentText    = onAgentText;
+    this.onUserText     = onUserText;
+
+    this.ws              = null;
+    this.ready           = false;
+    this.agentSpeaking   = false;
+    this._keepAlive      = null;
+    this._disconnecting  = false;
+    this._pendingFrames  = [];
   }
 
   connect() {
-    this.ws = new WebSocket('wss://agent.deepgram.com/agent', {
-      headers: { Authorization: `Token ${DEEPGRAM_API_KEY}` },
-    });
+    logger.info({ taskId: this.taskId, phoneNumber: this.phoneNumber }, 'outbound agent connecting');
+
+    this.ws = new WebSocket('wss://agent.deepgram.com/v1/agent/converse', ['token', DEEPGRAM_API_KEY]);
 
     this.ws.on('open', () => {
-      logger.info('deepgram voice agent websocket open');
+      logger.info({ taskId: this.taskId }, 'deepgram voice agent websocket open');
       this._sendSettings();
+      this._startKeepAlive();
     });
 
-    this.ws.on('message', (data) => {
-      // Binary message = audio from agent (linear16 24kHz)
-      if (Buffer.isBuffer(data) || data instanceof ArrayBuffer) {
-        this._handleAgentAudio(Buffer.from(data));
+    this.ws.on('message', (data, isBinary) => {
+      if (isBinary) {
+        this.onAudioOut?.(Buffer.from(data));
         return;
       }
-
-      // Text message = JSON event
       try {
-        const msg = JSON.parse(data.toString());
-        this._handleEvent(msg);
-      } catch (e) {
-        logger.warn({ raw: data.toString().slice(0, 100) }, 'deepgram agent non-json message');
+        this._handleEvent(JSON.parse(data.toString()));
+      } catch {
+        logger.warn({ raw: data.toString().slice(0, 100) }, 'outbound agent non-json message');
       }
     });
 
     this.ws.on('error', (err) => {
-      logger.error({ err: err.message }, 'deepgram voice agent error');
+      logger.error({ taskId: this.taskId, err: err.message }, 'outbound agent websocket error');
     });
 
     this.ws.on('close', (code, reason) => {
       this.ready = false;
-      logger.info({ code, reason: reason?.toString() }, 'deepgram voice agent closed');
+      this._stopKeepAlive();
+      logger.info({ taskId: this.taskId, code, reason: reason?.toString() }, 'outbound agent websocket closed');
+      // Abnormal close mid-call — mark task failed so it doesn't stay in 'calling' forever
+      if (code !== 1000 && code !== 1001 && !this._disconnecting) {
+        this.onMarkComplete?.('Call interrupted: connection to voice service lost', 'failed');
+      }
     });
   }
 
   _sendSettings() {
+    const systemPrompt = buildAgentSystemPrompt({
+      agentType:   this.agentType,
+      agentMode:   this.agentMode,
+      description: this.description,
+      phoneNumber: this.phoneNumber,
+      userContext: this.userContext,
+    });
+
     const settings = {
       type: 'Settings',
       audio: {
@@ -118,147 +110,132 @@ class DeepgramAgent {
         },
         think: {
           provider: { type: 'google', model: 'gemini-2.5-flash' },
-          prompt: CHATTER_PROMPT,
-          ...(GEMINI_API_KEY ? { api_key: GEMINI_API_KEY } : {}),
-          functions: [
-            {
-              name: 'web_search',
-              description: 'Search the web for current information. Use for recent facts, prices, news, or data not available from the conversation.',
-              parameters: {
-                type: 'object',
-                properties: {
-                  query: { type: 'string', description: 'Search query' },
-                },
-                required: ['query'],
-              },
-            },
-          ],
+          prompt: systemPrompt,
+          functions: [MARK_COMPLETE_FN],
         },
         speak: {
           provider: { type: 'deepgram', model: 'aura-2-odysseus-en' },
         },
-        greeting: null, // no greeting — Chatter waits to be addressed
+        greeting: buildGreeting(this.agentType),
       },
     };
-
     this.ws.send(JSON.stringify(settings));
-    logger.debug('deepgram agent settings sent');
+    logger.info({ taskId: this.taskId, agentType: this.agentType }, 'outbound agent settings sent');
+  }
+
+  _startKeepAlive() {
+    this._keepAlive = setInterval(() => {
+      if (this.ws?.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify({ type: 'KeepAlive' }));
+      }
+    }, 10000);
+  }
+
+  _stopKeepAlive() {
+    if (this._keepAlive) {
+      clearInterval(this._keepAlive);
+      this._keepAlive = null;
+    }
   }
 
   _handleEvent(msg) {
     switch (msg.type) {
       case 'SettingsApplied':
         this.ready = true;
-        logger.info('deepgram agent ready');
+        logger.info({ taskId: this.taskId }, 'outbound agent ready');
+        if (this._pendingFrames.length > 0) {
+          for (const frame of this._pendingFrames) {
+            if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(frame);
+          }
+          this._pendingFrames = [];
+        }
         break;
-
-      case 'UserStartedSpeaking':
-        logger.debug('user started speaking');
-        break;
-
       case 'AgentStartedSpeaking':
         this.agentSpeaking = true;
-        logger.debug('agent started speaking');
         break;
-
       case 'AgentAudioDone':
         this.agentSpeaking = false;
-        // Flush any remaining PCM buffer
-        if (this._pcmBuffer.length > 0) {
-          this._flushPcmBuffer();
-        }
-        logger.debug('agent audio done');
         break;
-
       case 'ConversationText':
         if (msg.role === 'user' && msg.content) {
-          logger.info({ text: msg.content }, 'user said');
+          logger.info({ taskId: this.taskId, text: msg.content }, 'user said');
           this.onUserText?.(msg.content);
-        } else if (msg.role === 'assistant' && msg.content) {
-          logger.info({ text: msg.content }, 'agent said');
+        }
+        if (msg.role === 'assistant' && msg.content) {
+          logger.info({ taskId: this.taskId, text: msg.content }, 'agent said');
           this.onAgentText?.(msg.content);
         }
         break;
-
-      case 'Welcome':
-        logger.info({ session_id: msg.session_id }, 'deepgram agent welcome');
-        break;
-
       case 'FunctionCallRequest':
-        this._handleFunctionCall(msg);
+        this._handleFunctionCall(msg).catch(err =>
+          logger.error({ taskId: this.taskId, err: err.message }, 'function call handler failed')
+        );
         break;
-
+      case 'Welcome':
+        logger.info({ taskId: this.taskId, session_id: msg.session_id }, 'outbound agent welcome');
+        break;
       case 'Error':
-        logger.error({ description: msg.description, code: msg.code }, 'deepgram agent error event');
+        logger.error({ taskId: this.taskId, description: msg.description, code: msg.code }, 'outbound agent error event');
+        this.onMarkComplete?.(`Call failed: agent error (${msg.code || msg.description || 'unknown'})`, 'failed');
+        this.disconnect();
         break;
-
       default:
-        logger.debug({ type: msg.type }, 'deepgram agent event');
+        logger.debug({ taskId: this.taskId, type: msg.type }, 'outbound agent event');
     }
   }
 
   async _handleFunctionCall(msg) {
-    const { function_call_id, input } = msg;
-    const name = input?.name;
-    const args = input?.arguments;
-    logger.info({ function_call_id, name }, 'agent function call request');
+    // Support both format A and format B from Deepgram
+    let id, name, rawArgs;
 
-    let result = '';
-    if (name === 'web_search') {
-      const query = typeof args === 'string' ? JSON.parse(args).query : args?.query;
-      result = await webSearch(query);
+    if (msg.functions && Array.isArray(msg.functions) && msg.functions.length > 0) {
+      // Format B: { type: 'FunctionCallRequest', functions: [{ id, name, arguments }] }
+      const fn = msg.functions[0];
+      id      = fn.id;
+      name    = fn.name;
+      rawArgs = fn.arguments;
     } else {
-      result = `Unknown function: ${name}`;
+      // Format A: { type: 'FunctionCallRequest', function_call_id, input: { name, arguments } }
+      id      = msg.function_call_id;
+      name    = msg.input?.name;
+      rawArgs = msg.input?.arguments;
     }
 
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({
-        type: 'FunctionCallResponse',
-        function_call_id,
-        output: result,
-      }));
-    }
-  }
+    logger.info({ taskId: this.taskId, id, name }, 'outbound agent function call request');
 
-  _handleAgentAudio(pcmChunk) {
-    // Accumulate PCM output and convert to mulaw 8kHz frames for Twilio
-    this._pcmBuffer = Buffer.concat([this._pcmBuffer, pcmChunk]);
+    if (name === 'mark_complete') {
+      let result;
+      try {
+        const parsed = typeof rawArgs === 'string' ? JSON.parse(rawArgs) : rawArgs;
+        result = parsed?.result ?? String(rawArgs);
+      } catch {
+        result = String(rawArgs);
+      }
 
-    // Process in chunks of 6 bytes (3 samples at 16-bit = 1 output sample at 8kHz)
-    // Minimum sensible chunk: 160 output mulaw samples = 480 input PCM bytes (60 input samples * 2 bytes * 3 for 24→8 downsample)
-    const inputBytesPerFrame = TWILIO_FRAME_BYTES * 3 * 2; // 960 bytes of 24kHz PCM per Twilio frame
-    while (this._pcmBuffer.length >= inputBytesPerFrame) {
-      const slice = this._pcmBuffer.slice(0, inputBytesPerFrame);
-      this._pcmBuffer = this._pcmBuffer.slice(inputBytesPerFrame);
-      const mulawFrame = agentToTwilio(slice);
-      this.onAudioOut([mulawFrame]);
+      logger.info({ taskId: this.taskId, result }, 'mark_complete called');
+      this.onMarkComplete?.(result);
+      // client_side function — no FunctionCallResponse; hangUp() will close the stream
+    } else {
+      logger.warn({ taskId: this.taskId, name }, 'outbound agent unknown function');
     }
   }
 
-  _flushPcmBuffer() {
-    if (this._pcmBuffer.length === 0) return;
-    // Pad to multiple of 6 bytes and convert remaining
-    const padded = Buffer.alloc(Math.ceil(this._pcmBuffer.length / 6) * 6);
-    this._pcmBuffer.copy(padded);
-    const mulawFrame = agentToTwilio(padded);
-    this.onAudioOut([mulawFrame]);
-    this._pcmBuffer = Buffer.alloc(0);
-  }
-
-  // Send a Twilio mulaw 8kHz frame to the agent (converts to linear16 48kHz).
-  sendTwilioFrame(base64Chunk) {
-    if (!this.ready || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-    // Don't feed our own audio back to the agent while it's speaking
-    if (this.agentSpeaking) return;
-    const mulawBuf = Buffer.from(base64Chunk, 'base64');
-    const pcmBuf = twilioToAgent(mulawBuf);
-    this.ws.send(pcmBuf);
+  sendPcmFrame(linear16Buf) {
+    if (!this.ready) {
+      this._pendingFrames.push(linear16Buf);
+      return;
+    }
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    this.ws.send(linear16Buf);
   }
 
   disconnect() {
     this.ready = false;
+    this._disconnecting = true;
+    this._stopKeepAlive();
     this.ws?.close();
+    logger.info({ taskId: this.taskId }, 'outbound agent disconnected');
   }
 }
 
-module.exports = DeepgramAgent;
+module.exports = OutboundAgent;

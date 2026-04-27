@@ -1,0 +1,1276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OUTBOUND AI</title>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@300;400;500;600;700&family=Figtree:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    /* ── Tokens ───────────────────────────────────────────────────────────── */
+    :root {
+      --bg:          #0F0F0F;
+      --surface:     #1C1C1C;
+      --surface-hi:  #252525;
+      --rule:        #2C2C2C;
+      --accent:      #3ECF8E;
+      --accent-dim:  #25855A;
+      --accent-mute: #0D2E1F;
+      --text-1:      #EDEDED;
+      --text-2:      #A0A0A0;
+      --text-3:      #525252;
+      --green:       #3ECF8E;
+      --red:         #FF4444;
+      --blue:        #4F81FF;
+    }
+
+    /* ── Reset ────────────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text-1);
+      font-family: 'Figtree', sans-serif;
+      min-height: 100dvh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Typography helpers ───────────────────────────────────────────────── */
+    .mono { font-family: 'Chakra Petch', monospace; }
+
+    /* ── Header (compact, always visible) ───────────────────────────────── */
+    header {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 20px 16px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .header-wordmark {
+      font-family: 'Chakra Petch', monospace;
+      font-weight: 500;
+      font-size: 1.05rem;
+      letter-spacing: 0.15em;
+      color: var(--text-1);
+      text-transform: uppercase;
+    }
+
+    body.no-tasks .header-wordmark { display: none; }
+
+    .header-status {
+      font-family: 'Chakra Petch', monospace;
+      font-size: 0.72rem;
+      letter-spacing: 0.1em;
+      color: var(--text-2);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-transform: uppercase;
+    }
+
+    #health-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      flex-shrink: 0;
+      transition: background 0.3s;
+    }
+
+    #health-dot.err { background: var(--red); }
+
+    .header-rule {
+      max-width: 760px;
+      margin: 0 auto 0;
+      height: 1px;
+      background: var(--rule);
+    }
+
+    body.no-tasks .header-rule { display: none; }
+
+    /* ── Hero layout (empty state) ───────────────────────────────────────── */
+    .hero-wrap {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 80px 16px 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 28px;
+    }
+
+    body.has-tasks .hero-wrap { display: none; }
+
+    .hero-title {
+      font-family: 'Chakra Petch', monospace;
+      font-size: 2.4rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      color: var(--text-1);
+      text-align: center;
+    }
+
+    .hero-accent {
+      color: var(--accent);
+    }
+
+    .hero-subtitle {
+      font-family: 'Figtree', sans-serif;
+      font-size: 1.05rem;
+      color: var(--text-2);
+      text-align: center;
+      line-height: 1.6;
+      max-width: 460px;
+      margin-top: -8px;
+    }
+
+    .hero-input-wrap {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--rule);
+      border-radius: 10px;
+      padding: 4px;
+      transition: border-color 0.18s, box-shadow 0.18s;
+    }
+
+    .hero-input-wrap:focus-within {
+      border-color: var(--accent-dim);
+      box-shadow: 0 0 0 3px var(--accent-mute);
+    }
+
+    textarea#hero-input {
+      width: 100%;
+      background: transparent;
+      border: none;
+      outline: none;
+      resize: none;
+      color: var(--text-1);
+      font-family: 'Figtree', sans-serif;
+      font-size: 1rem;
+      line-height: 1.6;
+      min-height: 80px;
+      padding: 16px 16px 8px;
+      field-sizing: content;
+    }
+
+    textarea#hero-input::placeholder {
+      color: var(--text-3);
+    }
+
+    .hero-input-footer {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding: 6px 10px;
+      gap: 10px;
+    }
+
+    #hero-error {
+      flex: 1;
+      font-size: 0.78rem;
+      color: var(--red);
+      min-height: 16px;
+    }
+
+    #hero-submit-btn {
+      font-family: 'Chakra Petch', monospace;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      background: var(--accent);
+      color: #0a0a0a;
+      border: none;
+      border-radius: 6px;
+      padding: 10px 26px;
+      cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+      white-space: nowrap;
+    }
+
+    #hero-submit-btn:hover:not(:disabled) { background: #5ADBA0; }
+    #hero-submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    /* ── Example chips ────────────────────────────────────────────────────── */
+    .chips-label {
+      font-family: 'Chakra Petch', monospace;
+      font-size: 0.62rem;
+      letter-spacing: 0.18em;
+      color: var(--text-3);
+      text-transform: uppercase;
+      text-align: center;
+    }
+
+    .chips-wrap {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      width: 100%;
+    }
+
+    .example-chip {
+      font-family: 'Figtree', sans-serif;
+      font-size: 0.82rem;
+      color: var(--text-2);
+      background: var(--surface);
+      border: 1px solid var(--rule);
+      border-radius: 20px;
+      padding: 7px 18px;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s, background 0.15s;
+    }
+
+    .example-chip:hover {
+      border-color: var(--accent-dim);
+      color: var(--text-1);
+      background: var(--surface-hi);
+    }
+
+    /* ── Compact input (has-tasks) ───────────────────────────────────────── */
+    .compact-wrap {
+      max-width: 760px;
+      margin: 24px auto 0;
+      padding: 0 16px;
+    }
+
+    body.no-tasks .compact-wrap { display: none; }
+    body.no-tasks .calls-section { display: none; }
+
+    textarea#request-input {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--rule);
+      border-radius: 6px;
+      outline: none;
+      resize: vertical;
+      color: var(--text-1);
+      font-family: 'Figtree', sans-serif;
+      font-size: 0.92rem;
+      line-height: 1.6;
+      min-height: 64px;
+      padding: 14px 16px;
+      transition: border-color 0.18s;
+      field-sizing: content;
+    }
+
+    textarea#request-input::placeholder {
+      color: var(--text-3);
+      font-family: 'Figtree', sans-serif;
+    }
+
+    textarea#request-input:focus { border-color: var(--accent-dim); }
+
+    .dispatch-footer {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 12px;
+      margin-top: 10px;
+    }
+
+    #submit-error {
+      flex: 1;
+      font-family: 'Figtree', sans-serif;
+      font-size: 0.78rem;
+      color: var(--red);
+      min-height: 16px;
+    }
+
+    #submit-btn {
+      font-family: 'Chakra Petch', monospace;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      background: var(--accent);
+      color: #0a0a0a;
+      border: none;
+      border-radius: 4px;
+      padding: 10px 24px;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s, opacity 0.15s;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    #submit-btn:hover:not(:disabled) { background: #5ADBA0; }
+    #submit-btn:active:not(:disabled) { transform: scale(0.97); }
+    #submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    /* ── Calls section ────────────────────────────────────────────────────── */
+    .calls-section {
+      max-width: 760px;
+      margin: 36px auto 64px;
+      padding: 0 16px;
+    }
+
+    .calls-label {
+      font-family: 'Chakra Petch', monospace;
+      font-size: 0.68rem;
+      letter-spacing: 0.2em;
+      color: var(--text-3);
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 0;
+    }
+
+    .calls-label-line {
+      flex: 1;
+      height: 1px;
+      background: var(--rule);
+    }
+
+    /* ── Task rows ────────────────────────────────────────────────────────── */
+    #task-list {
+      border-top: 1px solid var(--rule);
+      margin-top: 12px;
+    }
+
+    .task-row {
+      border-bottom: 1px solid var(--rule);
+      cursor: pointer;
+      position: relative;
+    }
+
+    .task-row:hover .task-main { background: var(--surface); }
+
+    .task-main {
+      display: grid;
+      grid-template-columns: 108px 1fr auto auto;
+      align-items: center;
+      gap: 16px;
+      padding: 13px 4px;
+      transition: background 0.12s;
+    }
+
+    /* Status cell */
+    .task-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .status-label {
+      font-family: 'Chakra Petch', monospace;
+      font-size: 0.66rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .task-row.s-calling   .status-dot   { background: var(--accent); }
+    .task-row.s-calling   .status-label { color: var(--accent); }
+    .task-row.s-completed .status-dot   { background: var(--green); }
+    .task-row.s-completed .status-label { color: var(--green); }
+    .task-row.s-failed    .status-dot   { background: var(--red); }
+    .task-row.s-failed    .status-label { color: var(--red); }
+    .task-row.s-pending   .status-dot   { background: var(--text-3); }
+    .task-row.s-pending   .status-label { color: var(--text-3); }
+    .task-row.s-scheduled .status-dot   { background: var(--blue); }
+    .task-row.s-scheduled .status-label { color: var(--blue); }
+    .task-row.s-cancelled .status-dot   { background: var(--text-3); }
+    .task-row.s-cancelled .status-label { color: var(--text-3); }
+
+    @keyframes pulse-green {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+
+    .task-row.s-calling .status-dot { animation: pulse-green 1.2s ease-in-out infinite; }
+
+    /* Phone + description cell */
+    .task-info {
+      display: flex;
+      align-items: baseline;
+      gap: 14px;
+      min-width: 0;
+    }
+
+    .task-phone {
+      font-family: 'Figtree', sans-serif;
+      font-size: 0.88rem;
+      font-weight: 500;
+      color: var(--text-1);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .task-desc {
+      font-family: 'Figtree', sans-serif;
+      font-size: 0.84rem;
+      color: var(--text-2);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .task-row.s-cancelled .task-desc { text-decoration: line-through; color: var(--text-3); }
+
+    .task-inline-result {
+      font-family: 'Chakra Petch', monospace;
+      font-size: 0.66rem;
+      letter-spacing: 0.05em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 200px;
+      flex-shrink: 0;
+    }
+
+    .task-row.s-completed .task-inline-result { color: var(--green); }
+    .task-row.s-failed    .task-inline-result { color: var(--red); }
+
+    .task-time {
+      font-family: 'Chakra Petch', monospace;
+      font-size: 0.65rem;
+      color: var(--text-3);
+      text-align: right;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .task-cancel {
+      font-size: 0.85rem;
+      color: var(--text-3);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0 4px;
+      line-height: 1;
+      opacity: 0;
+      transition: opacity 0.15s, color 0.15s;
+      flex-shrink: 0;
+    }
+
+    .task-row:hover .task-cancel { opacity: 1; }
+    .task-cancel:hover { color: var(--red); }
+
+    /* ── Agent badge ─────────────────────────────────────────────────────── */
+    .agent-badge {
+      font-family: 'Chakra Petch', monospace;
+      font-size: 0.58rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 2px 8px;
+      border-radius: 3px;
+      border: 1px solid var(--rule);
+      color: var(--text-3);
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+
+    .agent-badge.agent-food_ordering         { border-color: #B45309; color: #FBBF24; }
+    .agent-badge.agent-appointment_booking   { border-color: #1D4ED8; color: #60A5FA; }
+    .agent-badge.agent-general_customer_service { border-color: #7C3AED; color: #A78BFA; }
+    .agent-badge.agent-insurance_calls       { border-color: #065F46; color: #34D399; }
+
+    /* ── Progress bar ─────────────────────────────────────────────────────── */
+    .task-progress {
+      height: 2px;
+      background: var(--rule);
+      overflow: hidden;
+    }
+
+    .task-progress-fill {
+      height: 100%;
+      background: var(--accent);
+      width: 0%;
+      transition: width 2s linear;
+    }
+
+    .task-row.s-completed .task-progress-fill { background: var(--green); }
+    .task-row.s-failed    .task-progress-fill { background: var(--red); }
+
+    /* ── Transcript expand ────────────────────────────────────────────────── */
+    .transcript-wrap {
+      display: grid;
+      grid-template-rows: 0fr;
+      transition: grid-template-rows 0.25s ease;
+    }
+
+    .transcript-wrap.open { grid-template-rows: 1fr; }
+
+    .transcript-inner { overflow: hidden; }
+
+    .transcript-body {
+      background: var(--surface);
+      padding: 16px 20px 20px;
+      margin-bottom: 1px;
+    }
+
+    .transcript-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+      border-bottom: 1px solid var(--rule);
+      padding-bottom: 10px;
+    }
+
+    .transcript-header-label {
+      font-family: 'Chakra Petch', monospace;
+      font-size: 0.62rem;
+      letter-spacing: 0.2em;
+      color: var(--accent);
+      text-transform: uppercase;
+    }
+
+    .transcript-line-count {
+      font-family: 'Chakra Petch', monospace;
+      font-size: 0.62rem;
+      letter-spacing: 0.08em;
+      color: var(--text-3);
+    }
+
+    .transcript-lines {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 320px;
+      overflow-y: auto;
+    }
+
+    .transcript-lines::-webkit-scrollbar { width: 3px; }
+    .transcript-lines::-webkit-scrollbar-track { background: transparent; }
+    .transcript-lines::-webkit-scrollbar-thumb { background: var(--rule); }
+
+    .transcript-line {
+      display: grid;
+      grid-template-columns: 52px 1fr;
+      gap: 12px;
+      align-items: baseline;
+    }
+
+    .tl-role {
+      font-family: 'Chakra Petch', monospace;
+      font-size: 0.62rem;
+      letter-spacing: 0.1em;
+      color: var(--text-3);
+      text-transform: uppercase;
+      padding-top: 1px;
+      flex-shrink: 0;
+    }
+
+    .tl-role.agent { color: var(--accent); }
+
+    .tl-content {
+      font-family: 'Figtree', sans-serif;
+      font-size: 0.88rem;
+      color: var(--text-1);
+      line-height: 1.55;
+      word-break: break-word;
+    }
+
+    .transcript-cursor {
+      display: inline-block;
+      color: var(--accent);
+      animation: blink-cursor 0.9s step-end infinite;
+      margin-left: 2px;
+      font-size: 0.9em;
+    }
+
+    @keyframes blink-cursor {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0; }
+    }
+
+    .transcript-result {
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid var(--rule);
+      font-family: 'Chakra Petch', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.08em;
+      color: var(--accent);
+    }
+
+    .transcript-empty-msg {
+      font-family: 'Figtree', sans-serif;
+      font-size: 0.82rem;
+      color: var(--text-3);
+      padding: 8px 0;
+    }
+
+    /* ── Mark Complete ────────────────────────────────────────────────────── */
+    .mark-complete-wrap {
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid var(--rule);
+    }
+
+    .mark-complete-btn {
+      font-family: 'Chakra Petch', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      background: transparent;
+      border: 1px solid var(--rule);
+      color: var(--text-2);
+      padding: 6px 16px;
+      cursor: pointer;
+      border-radius: 3px;
+      transition: border-color 0.15s, color 0.15s;
+    }
+
+    .mark-complete-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    .mark-complete-input-wrap {
+      display: none;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .mark-complete-input {
+      flex: 1;
+      background: var(--surface-hi);
+      border: 1px solid var(--rule);
+      color: var(--text-1);
+      font-family: 'Figtree', sans-serif;
+      font-size: 0.85rem;
+      padding: 7px 12px;
+      border-radius: 3px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .mark-complete-input:focus { border-color: var(--accent-dim); }
+
+    .mark-complete-confirm {
+      font-family: 'Chakra Petch', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      background: var(--accent);
+      color: #0a0a0a;
+      border: none;
+      padding: 7px 18px;
+      cursor: pointer;
+      border-radius: 3px;
+      white-space: nowrap;
+    }
+
+    .mark-complete-confirm:hover { background: #5ADBA0; }
+  </style>
+</head>
+<body class="no-tasks">
+
+  <!-- Header (compact mode only) -->
+  <header>
+    <span class="header-wordmark">OUTBOUND AI</span>
+    <div class="header-status">
+      <div id="health-dot"></div>
+      <span id="health-label">0 ACTIVE</span>
+    </div>
+  </header>
+  <div class="header-rule"></div>
+
+  <!-- Hero (empty state) -->
+  <div class="hero-wrap">
+    <div class="hero-title">OUTBOUND <span class="hero-accent">AI</span></div>
+    <div class="hero-subtitle">Tell it what you need done. It makes the call.</div>
+    <div class="hero-input-wrap">
+      <textarea
+        id="hero-input"
+        placeholder='e.g. "Order a large taro boba for pickup at 5pm from the nearest boba shop in SF" or "Call +1-650-555-1234 and book a haircut for Saturday"'
+      ></textarea>
+      <div class="hero-input-footer">
+        <div id="hero-error"></div>
+        <button id="hero-submit-btn" type="button">EXECUTE →</button>
+      </div>
+    </div>
+    <div class="chips-label">Try an example</div>
+    <div class="chips-wrap" id="chips-wrap"></div>
+  </div>
+
+  <!-- Compact input (has-tasks) -->
+  <div class="compact-wrap">
+    <textarea
+      id="request-input"
+      rows="3"
+      placeholder='e.g. "Order boba from nearest shop in SF" or "Call +1-650-555-1234 and book a haircut"'
+    ></textarea>
+    <div class="dispatch-footer">
+      <div id="submit-error"></div>
+      <button id="submit-btn" type="button">EXECUTE →</button>
+    </div>
+  </div>
+
+  <!-- Calls Section -->
+  <div class="calls-section">
+    <div class="calls-label">
+      CALLS
+      <span class="calls-label-line"></span>
+      <span id="calls-count">0 TOTAL</span>
+    </div>
+    <div id="task-list"></div>
+  </div>
+
+  <script>
+    // ── State ─────────────────────────────────────────────────────────────────
+    const state = {
+      tasks:      [],
+      expanded:   new Set(),
+      details:    {},
+      callStart:  {},
+    };
+
+    // ── Example chips ─────────────────────────────────────────────────────────
+    const EXAMPLE_CHIPS = [
+      { label: 'Order boba pickup',     template: 'Order a large taro boba for pickup at 5pm from the nearest boba shop in SF' },
+      { label: 'Book a vet visit',      template: 'Find a vet near downtown Seattle and book an appointment for my dog next week' },
+      { label: 'Schedule a haircut',    template: 'Call +1-XXX-XXX-XXXX and book a haircut for Saturday at noon' },
+      { label: 'Negotiate insurance',   template: 'Call +1-XXX-XXX-XXXX and ask about lowering my monthly insurance rate' },
+      { label: 'Get medical records',   template: 'Call +1-XXX-XXX-XXXX and request a copy of my medical records' },
+      { label: 'Book a restaurant',     template: 'Find a good Italian restaurant in SoHo and make a reservation for 2 at 7pm tonight' },
+    ];
+
+    function renderChips() {
+      const wrap = document.getElementById('chips-wrap');
+      if (!wrap) return;
+      wrap.innerHTML = EXAMPLE_CHIPS.map((c, i) =>
+        `<button class="example-chip" data-idx="${i}">${escHtml(c.label)}</button>`
+      ).join('');
+      wrap.addEventListener('click', e => {
+        const btn = e.target.closest('.example-chip');
+        if (!btn) return;
+        const chip = EXAMPLE_CHIPS[+btn.dataset.idx];
+        // Fill hero input and select the XXX placeholder so user can type their number
+        heroInput.value = chip.template;
+        heroInput.focus();
+        const phoneStart = chip.template.indexOf('+1-XXX');
+        const phoneEnd   = chip.template.indexOf(' and');
+        if (phoneStart !== -1 && phoneEnd !== -1) {
+          heroInput.setSelectionRange(phoneStart, phoneEnd);
+        } else {
+          heroInput.setSelectionRange(0, chip.template.length);
+        }
+      });
+    }
+
+    // ── DOM refs ──────────────────────────────────────────────────────────────
+    const heroInput    = document.getElementById('hero-input');
+    const heroSubmit   = document.getElementById('hero-submit-btn');
+    const heroError    = document.getElementById('hero-error');
+    const requestInput = document.getElementById('request-input');
+    const submitBtn    = document.getElementById('submit-btn');
+    const submitError  = document.getElementById('submit-error');
+    const taskList     = document.getElementById('task-list');
+    const healthDot    = document.getElementById('health-dot');
+    const healthLabel  = document.getElementById('health-label');
+    const callsCount   = document.getElementById('calls-count');
+
+    // ── Textarea auto-grow ────────────────────────────────────────────────────
+    function autoGrow(el) {
+      if (!CSS.supports('field-sizing', 'content')) {
+        el.style.height = 'auto';
+        el.style.height = el.scrollHeight + 'px';
+      }
+    }
+
+    heroInput.addEventListener('input', () => autoGrow(heroInput));
+    requestInput.addEventListener('input', () => autoGrow(requestInput));
+
+    heroInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(heroInput, heroError, heroSubmit); }
+    });
+    requestInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(requestInput, submitError, submitBtn); }
+    });
+
+    heroSubmit.addEventListener('click', () => handleSubmit(heroInput, heroError, heroSubmit));
+    submitBtn.addEventListener('click', () => handleSubmit(requestInput, submitError, submitBtn));
+
+    // ── Submit ────────────────────────────────────────────────────────────────
+    async function handleSubmit(inputEl, errorEl, btnEl) {
+      const text = inputEl.value.trim();
+      if (!text) return;
+
+      errorEl.textContent = '';
+      const origText = btnEl.textContent;
+      btnEl.textContent = 'DISPATCHING...';
+      btnEl.disabled = true;
+
+      try {
+        const res  = await fetch('/tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ request: text }),
+        });
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+          errorEl.textContent = data?.error || data?.message || `Error ${res.status}`;
+          return;
+        }
+
+        inputEl.value = '';
+        if (!CSS.supports('field-sizing', 'content')) inputEl.style.height = 'auto';
+
+        state.tasks = [data, ...state.tasks.filter(t => t.id !== data.id)];
+        state.expanded.add(data.id);
+        renderTasks(true);
+        await refreshTasks();
+
+      } catch {
+        errorEl.textContent = 'Could not connect to server.';
+      } finally {
+        btnEl.textContent = origText;
+        btnEl.disabled = false;
+      }
+    }
+
+    // ── Health ────────────────────────────────────────────────────────────────
+    async function checkHealth() {
+      try {
+        const res  = await fetch('/api/health');
+        const data = await res.json();
+        healthDot.classList.remove('err');
+        const n = data.activeCalls ?? 0;
+        healthLabel.textContent = `${n} ACTIVE`;
+      } catch {
+        healthDot.classList.add('err');
+        healthLabel.textContent = 'OFFLINE';
+      }
+    }
+
+    // ── Refresh loop ──────────────────────────────────────────────────────────
+    async function refreshTasks() {
+      try {
+        const res = await fetch('/tasks');
+        if (!res.ok) return;
+        state.tasks = await res.json();
+
+        const needDetails = state.tasks.filter(t =>
+          t.status === 'calling' || state.expanded.has(t.id)
+        );
+        await Promise.all(needDetails.map(async t => {
+          try {
+            const r = await fetch(`/tasks/${t.id}`);
+            if (!r.ok) return;
+            const d = await r.json();
+            state.details[t.id] = {
+              transcripts: d.transcripts || [],
+              result:      d.result || t.result || null,
+            };
+          } catch { /* silent */ }
+        }));
+
+        renderTasks(false);
+      } catch { /* silent */ }
+    }
+
+    // ── Render ────────────────────────────────────────────────────────────────
+    function renderTasks(animateFirst) {
+      const tasks = state.tasks;
+
+      // Toggle hero ↔ compact layout
+      document.body.className = tasks.length === 0 ? 'no-tasks' : 'has-tasks';
+
+      callsCount.textContent = `${tasks.length} TOTAL`;
+
+      if (tasks.length === 0) {
+        taskList.innerHTML = '';
+        return;
+      }
+
+      const existing = {};
+      taskList.querySelectorAll('.task-row[data-id]').forEach(el => {
+        existing[el.dataset.id] = el;
+      });
+
+      const ids = tasks.map(t => String(t.id));
+      Object.keys(existing).forEach(id => {
+        if (!ids.includes(id)) existing[id].remove();
+      });
+
+      tasks.forEach((task, idx) => {
+        const id = String(task.id);
+        if (existing[id]) {
+          updateRow(existing[id], task);
+        } else {
+          const el = createRow(task);
+          if (animateFirst && idx === 0) {
+            el.style.opacity = '0';
+            requestAnimationFrame(() => {
+              el.style.transition = 'opacity 0.25s';
+              el.style.opacity = '1';
+            });
+          }
+          const ref = taskList.children[idx];
+          if (ref) taskList.insertBefore(el, ref);
+          else taskList.appendChild(el);
+        }
+      });
+    }
+
+    function createRow(task) {
+      const el = document.createElement('div');
+      el.className = `task-row s-${task.status}`;
+      el.dataset.id = String(task.id);
+      el.innerHTML = rowHTML(task);
+      attachRowEvents(el, task);
+      return el;
+    }
+
+    function updateRow(el, task) {
+      const id = String(task.id);
+
+      // Auto-expand when call starts
+      if (task.status === 'calling' && !state.expanded.has(id)) {
+        state.expanded.add(id);
+        const wrap = el.querySelector('.transcript-wrap');
+        if (wrap) wrap.classList.add('open');
+        if (!state.details[id]) {
+          fetch(`/tasks/${id}`)
+            .then(r => r.ok ? r.json() : null)
+            .then(data => {
+              if (!data) return;
+              state.details[id] = { transcripts: data.transcripts || [], result: data.result || null };
+              const linesEl = el.querySelector('.transcript-lines');
+              if (linesEl) { renderTranscriptLines(linesEl, task, id); linesEl.scrollTop = linesEl.scrollHeight; }
+            }).catch(() => {});
+        }
+      }
+
+      // Track call start time for progress bar
+      if (task.status === 'calling' && !state.callStart[id]) {
+        state.callStart[id] = Date.now();
+      }
+
+      // Status class on the row (drives all CSS descendants)
+      el.className = `task-row s-${task.status}`;
+      const statusEl = el.querySelector('.task-status');
+      if (statusEl) {
+        const lbl = statusEl.querySelector('.status-label');
+        if (lbl) lbl.textContent = task.status.toUpperCase();
+      }
+
+      // Phone
+      const phoneEl = el.querySelector('.task-phone');
+      if (phoneEl) phoneEl.textContent = extractPhone(task) || '—';
+
+      // Description
+      const descEl = el.querySelector('.task-desc');
+      if (descEl) descEl.textContent = task.description || task.request || '';
+
+      // Inline result
+      const irEl  = el.querySelector('.task-inline-result');
+      const det   = state.details[id];
+      const result = det?.result || task.result || null;
+      if (irEl) {
+        if (result && (task.status === 'completed' || task.status === 'failed')) {
+          irEl.textContent = (task.status === 'completed' ? '✓ ' : '✗ ') + truncate(result, 40);
+        } else {
+          irEl.textContent = '';
+        }
+      }
+
+      // Time
+      const timeEl = el.querySelector('.task-time');
+      if (timeEl) timeEl.textContent = formatTime(task);
+
+      // Cancel button visibility
+      const cancelBtn = el.querySelector('.task-cancel');
+      if (cancelBtn) cancelBtn.style.display = task.status === 'pending' ? '' : 'none';
+
+      // Progress bar
+      const progressFill = el.querySelector('.task-progress-fill');
+      if (progressFill) {
+        if (task.status === 'calling' && state.callStart[id]) {
+          const elapsed = Date.now() - state.callStart[id];
+          const pct = Math.min(elapsed / 180000, 0.94) * 100;
+          progressFill.style.width = pct + '%';
+        } else if (task.status === 'completed' || task.status === 'failed') {
+          progressFill.style.width = '100%';
+        }
+      }
+
+      // Mark Complete button visibility
+      const mcWrap = el.querySelector('.mark-complete-wrap');
+      if (mcWrap) mcWrap.style.display = task.status === 'calling' ? '' : 'none';
+
+      // Transcript content
+      const tBody = el.querySelector('.transcript-body');
+      if (tBody) {
+        const linesEl = tBody.querySelector('.transcript-lines');
+        if (linesEl) renderTranscriptLines(linesEl, task, id);
+        const lineCount = tBody.querySelector('.transcript-line-count');
+        if (lineCount) {
+          const n = (state.details[id]?.transcripts || []).length;
+          lineCount.textContent = n ? `${n} LINE${n !== 1 ? 'S' : ''}` : '';
+        }
+        let resFooter = tBody.querySelector('.transcript-result');
+        if (result && task.status !== 'calling') {
+          if (!resFooter) {
+            resFooter = document.createElement('div');
+            resFooter.className = 'transcript-result';
+            tBody.appendChild(resFooter);
+          }
+          resFooter.textContent = (task.status === 'completed' ? '✓ RESULT: ' : '✗ RESULT: ') + result;
+        } else if (resFooter) {
+          resFooter.remove();
+        }
+      }
+
+      // Expand state
+      const wrap = el.querySelector('.transcript-wrap');
+      if (wrap) wrap.classList.toggle('open', state.expanded.has(id));
+
+      // Auto-scroll for calling tasks
+      if (task.status === 'calling' && state.expanded.has(id)) {
+        const linesEl = el.querySelector('.transcript-lines');
+        if (linesEl) linesEl.scrollTop = linesEl.scrollHeight;
+      }
+    }
+
+    const AGENT_LABELS = {
+      food_ordering:             'FOOD',
+      appointment_booking:       'APPT',
+      general_customer_service:  'SUPPORT',
+      insurance_calls:           'INSURANCE',
+    };
+
+    function agentBadgeHTML(task) {
+      const type = task.agent_type;
+      if (!type || type === 'generic') return '';
+      const label = AGENT_LABELS[type] || type.toUpperCase().replace(/_/g, ' ');
+      return `<span class="agent-badge agent-${escHtml(type)}">${escHtml(label)}</span>`;
+    }
+
+    function rowHTML(task) {
+      const id     = String(task.id);
+      const phone  = escHtml(extractPhone(task) || task.business_name || '—');
+      const desc   = escHtml(task.description || task.request || '');
+      const det    = state.details[id];
+      const result = det?.result || task.result || null;
+      const inlineResult = result && (task.status === 'completed' || task.status === 'failed')
+        ? `<span class="task-inline-result">${task.status === 'completed' ? '✓ ' : '✗ '}${escHtml(truncate(result, 40))}</span>`
+        : `<span class="task-inline-result"></span>`;
+
+      return `
+        <div class="task-main">
+          <div class="task-status">
+            <div class="status-dot"></div>
+            <span class="status-label">${task.status.toUpperCase()}</span>
+          </div>
+          <div class="task-info">
+            <span class="task-phone">${phone}</span>
+            <span class="task-desc">${desc}</span>
+            ${agentBadgeHTML(task)}
+          </div>
+          ${inlineResult}
+          <span class="task-time">${escHtml(formatTime(task))}</span>
+          <button class="task-cancel" title="Cancel" data-action="cancel" style="${task.status !== 'pending' ? 'display:none' : ''}">×</button>
+        </div>
+        <div class="task-progress">
+          <div class="task-progress-fill" style="width:0%"></div>
+        </div>
+        <div class="transcript-wrap${state.expanded.has(id) ? ' open' : ''}">
+          <div class="transcript-inner">
+            <div class="transcript-body">
+              <div class="transcript-header">
+                <span class="transcript-header-label">LIVE TRANSCRIPT</span>
+                <span class="transcript-line-count"></span>
+              </div>
+              <div class="transcript-lines"></div>
+              <div class="mark-complete-wrap" style="${task.status !== 'calling' ? 'display:none' : ''}">
+                <button class="mark-complete-btn" data-action="mark-complete">Mark Complete</button>
+                <div class="mark-complete-input-wrap">
+                  <input class="mark-complete-input" placeholder="What was the result?">
+                  <button class="mark-complete-confirm" data-action="confirm-complete">Confirm</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderTranscriptLines(container, task, resolvedId) {
+      const id          = resolvedId || String(task.id);
+      const transcripts = state.details[id]?.transcripts || [];
+      const currentTask = state.tasks.find(t => String(t.id) === id) || task;
+      const calling     = currentTask.status === 'calling';
+
+      if (transcripts.length === 0) {
+        container.innerHTML = `<div class="transcript-empty-msg">${
+          calling ? 'Waiting for conversation to begin…' : 'No transcript available.'
+        }</div>`;
+        return;
+      }
+
+      container.innerHTML = transcripts.map((t, i) => {
+        const role      = (t.role || '').toLowerCase();
+        const isAgent   = role === 'agent' || role === 'assistant';
+        const roleLabel = isAgent ? 'AGENT' : 'USER';
+        const isLast    = i === transcripts.length - 1;
+        const showCursor = isLast && isAgent && calling;
+        return `<div class="transcript-line">
+          <span class="tl-role${isAgent ? ' agent' : ''}">${roleLabel}</span>
+          <span class="tl-content">${escHtml(t.content || '')}${showCursor ? '<span class="transcript-cursor">▌</span>' : ''}</span>
+        </div>`;
+      }).join('');
+    }
+
+    function attachRowEvents(el, task) {
+      const id = String(task.id);
+
+      el.addEventListener('click', e => {
+        if (e.target.closest('[data-action]')) return;
+        toggleExpand(id, el, task);
+      });
+
+      // Cancel
+      el.addEventListener('click', e => {
+        if (!e.target.closest('[data-action="cancel"]')) return;
+        e.stopPropagation();
+        cancelTask(id);
+      });
+
+      // Mark complete — show input
+      el.addEventListener('click', e => {
+        const btn = e.target.closest('[data-action="mark-complete"]');
+        if (!btn) return;
+        e.stopPropagation();
+        const mcWrap = btn.closest('.mark-complete-wrap');
+        btn.style.display = 'none';
+        const inputWrap = mcWrap.querySelector('.mark-complete-input-wrap');
+        inputWrap.style.display = 'flex';
+        inputWrap.querySelector('.mark-complete-input').focus();
+      });
+
+      // Confirm complete
+      el.addEventListener('click', async e => {
+        const btn = e.target.closest('[data-action="confirm-complete"]');
+        if (!btn) return;
+        e.stopPropagation();
+        const inputWrap = btn.closest('.mark-complete-input-wrap');
+        const result = inputWrap.querySelector('.mark-complete-input').value.trim() || 'Task completed manually';
+        btn.textContent = '...';
+        btn.disabled = true;
+        try {
+          const res = await fetch(`/tasks/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'completed', result }),
+          });
+          if (!res.ok) throw new Error(`Server error ${res.status}`);
+          await refreshTasks();
+        } catch { /* silent — button re-enables */ } finally {
+          btn.textContent = 'Confirm';
+          btn.disabled = false;
+        }
+      });
+    }
+
+    // ── Expand / collapse ─────────────────────────────────────────────────────
+    function toggleExpand(id, el, task) {
+      if (state.expanded.has(id)) {
+        state.expanded.delete(id);
+      } else {
+        state.expanded.add(id);
+        if (!state.details[id]) {
+          fetch(`/tasks/${id}`)
+            .then(r => r.ok ? r.json() : null)
+            .then(data => {
+              if (!data) return;
+              state.details[id] = {
+                transcripts: data.transcripts || [],
+                result:      data.result || task.result || null,
+              };
+              const linesEl = el.querySelector('.transcript-lines');
+              if (linesEl) {
+                renderTranscriptLines(linesEl, task, id);
+                linesEl.scrollTop = linesEl.scrollHeight;
+              }
+              const lc = el.querySelector('.transcript-line-count');
+              if (lc) {
+                const n = state.details[id].transcripts.length;
+                lc.textContent = n ? `${n} LINE${n !== 1 ? 'S' : ''}` : '';
+              }
+            })
+            .catch(() => {});
+        } else {
+          const linesEl = el.querySelector('.transcript-lines');
+          if (linesEl) {
+            renderTranscriptLines(linesEl, task, id);
+            linesEl.scrollTop = linesEl.scrollHeight;
+          }
+        }
+      }
+
+      const wrap = el.querySelector('.transcript-wrap');
+      if (wrap) wrap.classList.toggle('open', state.expanded.has(id));
+    }
+
+    // ── Cancel ────────────────────────────────────────────────────────────────
+    async function cancelTask(id) {
+      try {
+        await fetch(`/tasks/${id}`, { method: 'DELETE' });
+        await refreshTasks();
+      } catch { /* silent */ }
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+    function extractPhone(task) {
+      if (task.phone_number) return task.phone_number;
+      if (task.request) {
+        const m = task.request.match(/(\+?[\d\s\-().]{7,})/);
+        if (m) return m[1].trim();
+      }
+      return null;
+    }
+
+    function formatTime(task) {
+      if (task.status === 'pending' && task.scheduled_at) {
+        const msUntil = new Date(task.scheduled_at).getTime() - Date.now();
+        if (msUntil > 0) {
+          const mins = Math.ceil(msUntil / 60000);
+          return `in ${mins}m`;
+        }
+      }
+      const ts = task.created_at || task.updated_at;
+      if (!ts) return '';
+      const secs = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
+      if (secs < 60)  return 'just now';
+      const mins = Math.floor(secs / 60);
+      if (mins < 60)  return `${mins}m ago`;
+      const hrs = Math.floor(mins / 60);
+      if (hrs < 24)   return `${hrs}h ago`;
+      return `${Math.floor(hrs / 24)}d ago`;
+    }
+
+    function truncate(str, n) {
+      if (!str) return '';
+      return str.length > n ? str.slice(0, n) + '…' : str;
+    }
+
+    function escHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    // ── Boot ──────────────────────────────────────────────────────────────────
+    (async function init() {
+      renderChips();
+      await Promise.all([checkHealth(), refreshTasks()]);
+      setInterval(refreshTasks, 2000);
+      setInterval(checkHealth, 10000);
+    })();
+  </script>
+</body>
+</html>

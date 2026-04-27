@@ -1,87 +1,85 @@
-/**
- * Audio transcoding between Twilio Media Streams and Deepgram Voice Agent.
- *
- * Twilio conference:  mulaw 8kHz  (G.711, 8-bit, 160 bytes = 20ms frame)
- * Deepgram Agent in:  linear16 48kHz (PCM, 16-bit, 1920 bytes = 20ms frame)
- * Deepgram Agent out: linear16 24kHz (PCM, 16-bit)
- */
+'use strict';
 
-// ----- mulaw <-> PCM16 (G.711 standard) -----
+// ITU-T G.711 μ-law decode: single μ-law byte → signed 16-bit PCM sample
+function mulawSampleDecode(mulaw) {
+  mulaw = ~mulaw & 0xFF;
+  const sign = mulaw & 0x80;
+  const exponent = (mulaw >> 4) & 0x07;
+  const mantissa = mulaw & 0x0F;
+  let sample = ((mantissa << 3) + 0x84) << exponent;
+  sample -= 0x84;
+  return sign ? -sample : sample;
+}
 
-const MULAW_BIAS = 0x84;
-const MULAW_CLIP = 32635;
-
-const EXP_TABLE = (() => {
-  const t = new Int8Array(256);
-  for (let i = 0; i < 256; i++) {
-    t[i] = Math.floor(Math.log(i) / Math.log(2));
-  }
-  return t;
-})();
-
-function pcm16ToMulaw(sample) {
-  let sign = 0;
-  if (sample < 0) { sign = 0x80; sample = -sample; }
-  if (sample > MULAW_CLIP) sample = MULAW_CLIP;
-  sample += MULAW_BIAS;
-  const exp = EXP_TABLE[sample >> 7] & 0x07;
+// ITU-T G.711 μ-law encode: signed 16-bit PCM sample → μ-law byte
+const MULAW_BIAS = 0x84; // 132 — ITU-T G.711 standard bias
+const MULAW_CLIP = 32767;
+function mulawSampleEncode(sample) {
+  const sign = sample < 0 ? 0x80 : 0;
+  if (sample < 0) sample = -sample;
+  sample = Math.min(sample + MULAW_BIAS, MULAW_CLIP);
+  let exp = 7;
+  for (let expMask = 0x4000; (sample & expMask) === 0 && exp > 0; exp--, expMask >>= 1) {}
   const mantissa = (sample >> (exp + 3)) & 0x0F;
   return ~(sign | (exp << 4) | mantissa) & 0xFF;
 }
 
-function mulawToPcm16(ulaw) {
-  ulaw = ~ulaw & 0xFF;
-  const sign = ulaw & 0x80;
-  const exp = (ulaw >> 4) & 0x07;
-  const mantissa = ulaw & 0x0F;
-  let sample = ((mantissa << 3) + MULAW_BIAS) << exp;
-  return sign ? -sample : sample;
+/**
+ * Decode a buffer of μ-law bytes to 16-bit signed PCM (little-endian).
+ *
+ * Twilio Media Streams sends audio as mulaw 8 kHz, base64-encoded.
+ * After base64-decoding, pass the raw bytes here to get linear16 PCM
+ * suitable for Deepgram Voice Agent (8 kHz, linear16).
+ *
+ * @param {Buffer} mulawBuf - Buffer of μ-law encoded bytes
+ * @returns {Buffer} Buffer of Int16 PCM samples (2 bytes per sample, little-endian)
+ */
+function mulawDecode(mulawBuf) {
+  const out = Buffer.allocUnsafe(mulawBuf.length * 2);
+  for (let i = 0; i < mulawBuf.length; i++) {
+    out.writeInt16LE(mulawSampleDecode(mulawBuf[i]), i * 2);
+  }
+  return out;
 }
 
-// ----- Twilio → Deepgram Agent -----
-// mulaw 8kHz → linear16 48kHz (upsample 6x, linear interpolation)
+/**
+ * Encode a buffer of 16-bit signed PCM (little-endian) to μ-law bytes.
+ *
+ * Use this to convert Deepgram Voice Agent linear16 output back to
+ * mulaw before sending to Twilio Media Streams.
+ *
+ * @param {Buffer} pcmBuf - Buffer of Int16 PCM samples (little-endian, 2 bytes each)
+ * @returns {Buffer} Buffer of μ-law encoded bytes (1 byte per sample)
+ */
+function mulawEncode(pcmBuf) {
+  const numSamples = Math.floor(pcmBuf.length / 2);
+  const out = Buffer.allocUnsafe(numSamples);
+  for (let i = 0; i < numSamples; i++) {
+    out[i] = mulawSampleEncode(pcmBuf.readInt16LE(i * 2));
+  }
+  return out;
+}
 
-function twilioToAgent(mulawBuf) {
-  const sampleCount = mulawBuf.length; // 160 samples per 20ms frame
-  const outSamples = sampleCount * 6;
+// Upsample linear16 8kHz → 48kHz by repeating each sample 6×
+function upsample8to48(buf) {
+  const numSamples = Math.floor(buf.length / 2);
+  const out = Buffer.allocUnsafe(numSamples * 12);
+  for (let i = 0; i < numSamples; i++) {
+    const sample = buf.readInt16LE(i * 2);
+    for (let j = 0; j < 6; j++) out.writeInt16LE(sample, i * 12 + j * 2);
+  }
+  return out;
+}
+
+// Downsample linear16 24kHz → 8kHz by taking every 3rd sample
+function downsample24to8(buf) {
+  const numSamples = Math.floor(buf.length / 2);
+  const outSamples = Math.floor(numSamples / 3);
   const out = Buffer.allocUnsafe(outSamples * 2);
-
-  for (let i = 0; i < sampleCount; i++) {
-    const curr = mulawToPcm16(mulawBuf[i]);
-    const next = mulawToPcm16(mulawBuf[Math.min(i + 1, sampleCount - 1)]);
-    for (let j = 0; j < 6; j++) {
-      const interp = Math.round(curr + (next - curr) * (j / 6));
-      out.writeInt16LE(Math.max(-32768, Math.min(32767, interp)), (i * 6 + j) * 2);
-    }
-  }
-  return out;
-}
-
-// ----- Deepgram Agent → Twilio -----
-// linear16 24kHz → mulaw 8kHz (downsample 3x, average, encode)
-
-function agentToTwilio(pcmBuf) {
-  const sampleCount = pcmBuf.length / 2; // 16-bit samples
-  const outSamples = Math.floor(sampleCount / 3);
-  const out = Buffer.allocUnsafe(outSamples);
-
   for (let i = 0; i < outSamples; i++) {
-    const a = pcmBuf.readInt16LE(i * 6);
-    const b = pcmBuf.readInt16LE(i * 6 + 2);
-    const c = pcmBuf.readInt16LE(i * 6 + 4);
-    const avg = Math.round((a + b + c) / 3);
-    out[i] = pcm16ToMulaw(avg);
+    out.writeInt16LE(buf.readInt16LE(i * 6), i * 2);
   }
   return out;
 }
 
-// Split a Buffer into N-byte chunks.
-function chunk(buf, size) {
-  const chunks = [];
-  for (let i = 0; i < buf.length; i += size) {
-    chunks.push(buf.slice(i, i + size));
-  }
-  return chunks;
-}
-
-module.exports = { twilioToAgent, agentToTwilio, chunk };
+module.exports = { mulawDecode, mulawEncode, upsample8to48, downsample24to8 };
