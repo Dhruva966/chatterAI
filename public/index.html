@@ -896,12 +896,623 @@
 
     .mark-complete-confirm:hover { background: var(--primary-hover); }
 
+    /* ── Sidebar footer ──────────────────────────────────────────── */
+    .sidebar-footer {
+      border-top: 1px solid var(--border);
+      padding: 10px 8px;
+      flex-shrink: 0;
+    }
+
+    .sidebar-footer-btn {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 8px 10px;
+      background: none;
+      border: none;
+      border-radius: var(--r-sm);
+      cursor: pointer;
+      color: var(--fg-2);
+      transition: background 0.12s, color 0.12s;
+      text-align: left;
+    }
+
+    .sidebar-footer-btn:hover { background: var(--border); color: var(--fg); }
+
+    .sidebar-footer-btn svg { flex-shrink: 0; }
+
+    .sidebar-footer-label {
+      font-size: 13px;
+      font-weight: 500;
+      opacity: 1;
+      transition: opacity 0.15s;
+      white-space: nowrap;
+    }
+
+    .sidebar.collapsed .sidebar-footer-label { opacity: 0; pointer-events: none; }
+
+    /* Credit mini-bar in sidebar footer */
+    .credit-mini {
+      padding: 8px 10px 2px;
+      opacity: 1;
+      transition: opacity 0.15s;
+    }
+
+    .sidebar.collapsed .credit-mini { opacity: 0; pointer-events: none; }
+
+    .credit-mini-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 5px;
+    }
+
+    .credit-mini-label {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--fg-3);
+    }
+
+    .credit-mini-value {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--fg);
+    }
+
+    .credit-mini-value.low { color: var(--red); }
+
+    .credit-bar {
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .credit-bar-fill {
+      height: 100%;
+      background: var(--primary);
+      border-radius: 2px;
+      transition: width 0.4s ease;
+    }
+
+    .credit-bar-fill.low { background: var(--red); }
+
+    /* ── Header credit badge ─────────────────────────────────────── */
+    .credit-badge {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      background: var(--primary-muted);
+      border: 1px solid rgba(110,86,207,0.2);
+      border-radius: 100px;
+      padding: 3px 10px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--primary);
+      cursor: pointer;
+      transition: background 0.12s, border-color 0.12s;
+      white-space: nowrap;
+    }
+
+    .credit-badge:hover { background: rgba(110,86,207,0.18); }
+    .credit-badge.low { color: var(--red); background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.25); }
+    html.dark .credit-badge { border-color: rgba(164,143,255,0.2); }
+
+    /* ── Settings panel ──────────────────────────────────────────── */
+    .settings-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      display: flex;
+      align-items: stretch;
+      justify-content: flex-end;
+      pointer-events: none;
+    }
+
+    .settings-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.35);
+      opacity: 0;
+      transition: opacity 0.22s;
+      pointer-events: none;
+    }
+
+    .settings-panel {
+      position: relative;
+      width: 420px;
+      max-width: 100vw;
+      background: var(--card);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      transform: translateX(100%);
+      transition: transform 0.26s cubic-bezier(0.4,0,0.2,1);
+      pointer-events: none;
+      overflow: hidden;
+    }
+
+    .settings-overlay.open .settings-backdrop { opacity: 1; pointer-events: all; }
+    .settings-overlay.open .settings-panel   { transform: translateX(0); pointer-events: all; }
+
+    .settings-head {
+      height: var(--header-h);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .settings-title {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--fg);
+    }
+
+    .settings-close {
+      width: 30px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+      cursor: pointer;
+      color: var(--fg-2);
+      font-size: 16px;
+      transition: background 0.12s;
+    }
+
+    .settings-close:hover { background: var(--border); color: var(--fg); }
+
+    .settings-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+
+    .settings-section-title {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--fg-3);
+      margin-bottom: 12px;
+    }
+
+    /* Profile card */
+    .profile-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .profile-avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: var(--primary-muted);
+      border: 2px solid var(--primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-mono);
+      font-size: 16px;
+      font-weight: 500;
+      color: var(--primary);
+      flex-shrink: 0;
+      text-transform: uppercase;
+    }
+
+    .profile-info { flex: 1; min-width: 0; }
+
+    .profile-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--fg);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .profile-email {
+      font-size: 12px;
+      color: var(--fg-2);
+      margin-top: 2px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .profile-badge {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 2px 8px;
+      border-radius: 100px;
+      background: var(--primary-muted);
+      color: var(--primary);
+      border: 1px solid rgba(110,86,207,0.2);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    /* Billing card */
+    .billing-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      overflow: hidden;
+    }
+
+    .billing-balance {
+      padding: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .balance-label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--fg-3);
+      margin-bottom: 8px;
+    }
+
+    .balance-amount {
+      font-size: 36px;
+      font-weight: 600;
+      color: var(--fg);
+      line-height: 1;
+      font-family: var(--font-mono);
+      letter-spacing: -0.02em;
+    }
+
+    .balance-amount .cents { font-size: 20px; color: var(--fg-2); }
+    .balance-amount.low { color: var(--red); }
+
+    .balance-sub {
+      font-size: 12px;
+      color: var(--fg-2);
+      margin-top: 6px;
+    }
+
+    .balance-bar-wrap {
+      margin-top: 14px;
+    }
+
+    .balance-bar {
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .balance-bar-fill {
+      height: 100%;
+      background: var(--primary);
+      border-radius: 3px;
+      transition: width 0.5s ease;
+    }
+
+    .balance-bar-fill.low { background: var(--red); }
+
+    .balance-bar-labels {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 5px;
+    }
+
+    .balance-bar-labels span {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      color: var(--fg-3);
+    }
+
+    .billing-pricing {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .pricing-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 0;
+    }
+
+    .pricing-row + .pricing-row { border-top: 1px solid var(--border); }
+
+    .pricing-label {
+      font-size: 13px;
+      color: var(--fg-2);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .pricing-value {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--fg);
+    }
+
+    .billing-cta {
+      padding: 14px 20px;
+    }
+
+    .btn-add-credits {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 12px;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: var(--r-sm);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.12s, transform 0.1s;
+    }
+
+    .btn-add-credits:hover { background: var(--primary-hover); transform: translateY(-1px); }
+    .btn-add-credits:active { transform: translateY(0); }
+
+    /* Usage history */
+    .usage-list {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      overflow: hidden;
+    }
+
+    .usage-empty {
+      padding: 20px;
+      font-size: 12px;
+      color: var(--fg-3);
+      text-align: center;
+    }
+
+    .usage-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .usage-row:last-child { border-bottom: none; }
+
+    .usage-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      flex-shrink: 0;
+    }
+
+    .usage-text {
+      flex: 1;
+      min-width: 0;
+      font-size: 12px;
+      color: var(--fg);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .usage-cost {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--red);
+      flex-shrink: 0;
+    }
+
+    .usage-time {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--fg-3);
+      flex-shrink: 0;
+    }
+
+    /* ── Add Credits modal ───────────────────────────────────────── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(0,0,0,0.5);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.18s;
+    }
+
+    .modal-overlay.open { opacity: 1; pointer-events: all; }
+
+    .modal {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      width: 100%;
+      max-width: 380px;
+      overflow: hidden;
+      transform: translateY(12px);
+      transition: transform 0.2s;
+    }
+
+    .modal-overlay.open .modal { transform: translateY(0); }
+
+    .modal-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .modal-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--fg);
+    }
+
+    .modal-close {
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+      cursor: pointer;
+      color: var(--fg-2);
+      font-size: 14px;
+      transition: background 0.12s;
+    }
+
+    .modal-close:hover { background: var(--border); }
+
+    .modal-body { padding: 20px; }
+
+    .credit-options {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .credit-option {
+      padding: 12px 8px;
+      background: var(--bg);
+      border: 1.5px solid var(--border);
+      border-radius: var(--r-sm);
+      cursor: pointer;
+      text-align: center;
+      transition: border-color 0.12s, background 0.12s;
+    }
+
+    .credit-option:hover { border-color: var(--primary); }
+    .credit-option.selected { border-color: var(--primary); background: var(--primary-muted); }
+
+    .credit-option-amount {
+      font-family: var(--font-mono);
+      font-size: 16px;
+      font-weight: 500;
+      color: var(--fg);
+    }
+
+    .credit-option.selected .credit-option-amount { color: var(--primary); }
+
+    .credit-option-calls {
+      font-size: 10px;
+      color: var(--fg-3);
+      margin-top: 3px;
+    }
+
+    .modal-input-group {
+      margin-bottom: 12px;
+    }
+
+    .modal-label {
+      display: block;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--fg-2);
+      margin-bottom: 6px;
+      font-family: var(--font-mono);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .modal-input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+      color: var(--fg);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      padding: 9px 12px;
+      outline: none;
+      transition: border-color 0.12s;
+    }
+
+    .modal-input:focus { border-color: var(--primary); }
+
+    .modal-card-row {
+      display: grid;
+      grid-template-columns: 1fr 80px;
+      gap: 8px;
+    }
+
+    .modal-note {
+      font-size: 11px;
+      color: var(--fg-3);
+      text-align: center;
+      margin-top: 10px;
+      line-height: 1.5;
+    }
+
+    .modal-foot {
+      padding: 0 20px 20px;
+    }
+
+    .btn-pay {
+      width: 100%;
+      padding: 12px;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: var(--r-sm);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+
+    .btn-pay:hover { background: var(--primary-hover); }
+
     /* ── Responsive ──────────────────────────────────────────────── */
     @media (max-width: 600px) {
       .sidebar { display: none; }
       .agent-label { display: none; }
       .agent-btn { padding: 10px 12px; }
       .user-email { display: none; }
+      .credit-badge span { display: none; }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -925,6 +1536,24 @@
     <div class="sidebar-list" id="sidebar-list">
       <div class="sidebar-empty">No calls yet</div>
     </div>
+    <div class="sidebar-footer">
+      <div class="credit-mini" id="credit-mini">
+        <div class="credit-mini-row">
+          <span class="credit-mini-label">Credits</span>
+          <span class="credit-mini-value" id="credit-mini-value">$5.00</span>
+        </div>
+        <div class="credit-bar">
+          <div class="credit-bar-fill" id="credit-mini-bar" style="width:100%"></div>
+        </div>
+      </div>
+      <button class="sidebar-footer-btn" onclick="openSettings()">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="8" cy="8" r="2.5"/>
+          <path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3.05 3.05l1.06 1.06M11.89 11.89l1.06 1.06M3.05 12.95l1.06-1.06M11.89 4.11l1.06-1.06"/>
+        </svg>
+        <span class="sidebar-footer-label">Settings</span>
+      </button>
+    </div>
   </aside>
 
   <!-- Main -->
@@ -939,6 +1568,10 @@
       </div>
       <div class="header-right">
         <span class="user-email" id="user-email"></span>
+        <button class="credit-badge" id="credit-badge" onclick="openSettings()" title="View billing">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" aria-hidden="true"><circle cx="5" cy="5" r="4.5" fill="none" stroke="currentColor" stroke-width="1"/><text x="5" y="7.5" text-anchor="middle" font-size="6" font-family="monospace">$</text></svg>
+          <span id="credit-badge-text">$5.00 left</span>
+        </button>
         <button class="icon-btn" id="theme-toggle" aria-label="Toggle theme">☀</button>
         <button class="btn-signout" onclick="signOut()">Sign Out</button>
       </div>
@@ -1015,6 +1648,127 @@
           <div id="task-list"></div>
         </div>
 
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings panel -->
+  <div class="settings-overlay" id="settings-overlay">
+    <div class="settings-backdrop" onclick="closeSettings()"></div>
+    <div class="settings-panel">
+      <div class="settings-head">
+        <span class="settings-title">Settings</span>
+        <button class="settings-close" onclick="closeSettings()">✕</button>
+      </div>
+      <div class="settings-body">
+
+        <!-- Profile -->
+        <div>
+          <div class="settings-section-title">Profile</div>
+          <div class="profile-card">
+            <div class="profile-avatar" id="settings-avatar">?</div>
+            <div class="profile-info">
+              <div class="profile-name" id="settings-name">—</div>
+              <div class="profile-email" id="settings-email">—</div>
+            </div>
+            <span class="profile-badge">Private Beta</span>
+          </div>
+        </div>
+
+        <!-- Billing -->
+        <div>
+          <div class="settings-section-title">Billing &amp; Credits</div>
+          <div class="billing-card">
+            <div class="billing-balance">
+              <div class="balance-label">Remaining Balance</div>
+              <div class="balance-amount" id="settings-balance">
+                <span id="settings-balance-text">$5</span><span class="cents">.00</span>
+              </div>
+              <div class="balance-sub" id="settings-balance-sub">5 calls remaining · resets never (beta)</div>
+              <div class="balance-bar-wrap">
+                <div class="balance-bar">
+                  <div class="balance-bar-fill" id="settings-bar" style="width:100%"></div>
+                </div>
+                <div class="balance-bar-labels">
+                  <span>$0</span>
+                  <span>$5 included free</span>
+                </div>
+              </div>
+            </div>
+            <div class="billing-pricing">
+              <div class="pricing-row">
+                <span class="pricing-label">📞 Outbound AI call</span>
+                <span class="pricing-value">$1.00 / call</span>
+              </div>
+              <div class="pricing-row">
+                <span class="pricing-label">🎁 Welcome credits</span>
+                <span class="pricing-value">$5.00 free</span>
+              </div>
+              <div class="pricing-row">
+                <span class="pricing-label">💳 Next tier</span>
+                <span class="pricing-value">Coming soon</span>
+              </div>
+            </div>
+            <div class="billing-cta">
+              <button class="btn-add-credits" onclick="openAddCredits()">
+                + Add Credits
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Usage history -->
+        <div>
+          <div class="settings-section-title">Usage History</div>
+          <div class="usage-list" id="usage-list">
+            <div class="usage-empty">No calls charged yet</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Credits modal -->
+  <div class="modal-overlay" id="credits-modal">
+    <div class="modal">
+      <div class="modal-head">
+        <span class="modal-title">Add Credits</span>
+        <button class="modal-close" onclick="closeAddCredits()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="credit-options" id="credit-options">
+          <div class="credit-option selected" data-amount="5">
+            <div class="credit-option-amount">$5</div>
+            <div class="credit-option-calls">5 calls</div>
+          </div>
+          <div class="credit-option" data-amount="10">
+            <div class="credit-option-amount">$10</div>
+            <div class="credit-option-calls">10 calls</div>
+          </div>
+          <div class="credit-option" data-amount="25">
+            <div class="credit-option-amount">$25</div>
+            <div class="credit-option-calls">25 calls</div>
+          </div>
+        </div>
+        <div class="modal-input-group">
+          <label class="modal-label">Card Number</label>
+          <input class="modal-input" type="text" placeholder="4242 4242 4242 4242" maxlength="19" id="card-number">
+        </div>
+        <div class="modal-card-row">
+          <div class="modal-input-group">
+            <label class="modal-label">Expiry</label>
+            <input class="modal-input" type="text" placeholder="MM / YY" maxlength="7" id="card-expiry">
+          </div>
+          <div class="modal-input-group">
+            <label class="modal-label">CVC</label>
+            <input class="modal-input" type="text" placeholder="123" maxlength="3" id="card-cvc">
+          </div>
+        </div>
+        <div class="modal-note">🔒 Payments are securely processed — this is a demo, no real charge will occur.</div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn-pay" id="btn-pay" onclick="processPayment()">Pay & Add Credits</button>
       </div>
     </div>
   </div>
@@ -1230,6 +1984,7 @@
       }
 
       callsCount.textContent = tasks.length ? `${tasks.length} total` : '';
+      chargeForCallingTasks(tasks);
 
       if (tasks.length === 0) { taskList.innerHTML = ''; updateSidebar(); return; }
 
@@ -1596,9 +2351,186 @@
         .replace(/"/g, '&quot;');
     }
 
+    // ── Credits ─────────────────────────────────────────────────────────────────
+    const CREDIT_MAX  = 5.00;
+    const CREDIT_KEY  = 'chatter_credits';
+    const CHARGED_KEY = 'chatter_charged_tasks';
+    const USAGE_KEY   = 'chatter_usage_log';
+
+    function getCredits() {
+      const v = parseFloat(localStorage.getItem(CREDIT_KEY));
+      return isNaN(v) ? CREDIT_MAX : Math.max(0, v);
+    }
+
+    function setCredits(v) {
+      localStorage.setItem(CREDIT_KEY, Math.max(0, parseFloat(v.toFixed(2))));
+      refreshCreditUI();
+    }
+
+    function addCredits(amount) {
+      setCredits(getCredits() + amount);
+    }
+
+    function getChargedIds() {
+      try { return new Set(JSON.parse(localStorage.getItem(CHARGED_KEY) || '[]')); }
+      catch { return new Set(); }
+    }
+
+    function markCharged(id, label) {
+      const ids = getChargedIds();
+      ids.add(String(id));
+      localStorage.setItem(CHARGED_KEY, JSON.stringify([...ids]));
+      // append to usage log
+      const log = getUsageLog();
+      log.unshift({ id: String(id), label: label || `Call #${id}`, cost: 1.00, ts: Date.now() });
+      localStorage.setItem(USAGE_KEY, JSON.stringify(log.slice(0, 50)));
+    }
+
+    function getUsageLog() {
+      try { return JSON.parse(localStorage.getItem(USAGE_KEY) || '[]'); }
+      catch { return []; }
+    }
+
+    function chargeForCallingTasks(tasks) {
+      const charged = getChargedIds();
+      tasks.forEach(t => {
+        if (t.status === 'calling' && !charged.has(String(t.id))) {
+          const credits = getCredits();
+          if (credits > 0) {
+            setCredits(credits - 1.00);
+            markCharged(t.id, truncate(t.description || t.request || `Call #${t.id}`, 50));
+          }
+        }
+      });
+    }
+
+    function refreshCreditUI() {
+      const credits = getCredits();
+      const pct     = Math.max(0, (credits / CREDIT_MAX) * 100);
+      const low     = credits <= 1;
+      const fmt     = `$${credits.toFixed(2)}`;
+
+      // Header badge
+      const badge = document.getElementById('credit-badge');
+      const badgeTxt = document.getElementById('credit-badge-text');
+      if (badge) badge.classList.toggle('low', low);
+      if (badgeTxt) badgeTxt.textContent = `${fmt} left`;
+
+      // Sidebar mini bar
+      const miniVal = document.getElementById('credit-mini-value');
+      const miniBar = document.getElementById('credit-mini-bar');
+      if (miniVal) { miniVal.textContent = fmt; miniVal.classList.toggle('low', low); }
+      if (miniBar) { miniBar.style.width = pct + '%'; miniBar.classList.toggle('low', low); }
+
+      // Settings panel
+      const balText = document.getElementById('settings-balance-text');
+      const balEl   = document.getElementById('settings-balance');
+      const balSub  = document.getElementById('settings-balance-sub');
+      const barFill = document.getElementById('settings-bar');
+      if (balText) balText.textContent = `$${Math.floor(credits)}`;
+      if (balEl)   balEl.classList.toggle('low', low);
+      if (barFill) { barFill.style.width = pct + '%'; barFill.classList.toggle('low', low); }
+      if (balSub) {
+        const calls = Math.floor(credits);
+        balSub.textContent = low
+          ? `⚠ Only ${calls} call${calls !== 1 ? 's' : ''} remaining — top up soon`
+          : `${calls} call${calls !== 1 ? 's' : ''} remaining · resets never (beta)`;
+      }
+
+      // Usage list
+      const ul = document.getElementById('usage-list');
+      if (ul) {
+        const log = getUsageLog();
+        if (!log.length) {
+          ul.innerHTML = '<div class="usage-empty">No calls charged yet</div>';
+        } else {
+          ul.innerHTML = log.map(entry => `
+            <div class="usage-row">
+              <div class="usage-dot"></div>
+              <div class="usage-text">${escHtml(entry.label)}</div>
+              <span class="usage-cost">−$${entry.cost.toFixed(2)}</span>
+              <span class="usage-time">${escHtml(formatTime({ created_at: new Date(entry.ts).toISOString() }))}</span>
+            </div>`).join('');
+        }
+      }
+    }
+
+    // ── Settings panel ──────────────────────────────────────────────────────────
+    function openSettings() {
+      const email = sessionStorage.getItem('chatter_user_email') || 'user@demo.dev';
+      const initials = email.slice(0, 2).toUpperCase();
+      document.getElementById('settings-avatar').textContent = initials;
+      document.getElementById('settings-name').textContent   = email.split('@')[0];
+      document.getElementById('settings-email').textContent  = email;
+      refreshCreditUI();
+      document.getElementById('settings-overlay').classList.add('open');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeSettings() {
+      document.getElementById('settings-overlay').classList.remove('open');
+      document.body.style.overflow = '';
+    }
+
+    // ── Add Credits modal ───────────────────────────────────────────────────────
+    let selectedCreditAmount = 5;
+
+    document.getElementById('credit-options').addEventListener('click', e => {
+      const opt = e.target.closest('.credit-option');
+      if (!opt) return;
+      document.querySelectorAll('.credit-option').forEach(o => o.classList.remove('selected'));
+      opt.classList.add('selected');
+      selectedCreditAmount = parseInt(opt.dataset.amount, 10);
+      document.getElementById('btn-pay').textContent = `Pay $${selectedCreditAmount} & Add Credits`;
+    });
+
+    // Format card number input
+    document.getElementById('card-number').addEventListener('input', e => {
+      let v = e.target.value.replace(/\D/g, '').slice(0, 16);
+      e.target.value = v.replace(/(.{4})/g, '$1 ').trim();
+    });
+
+    document.getElementById('card-expiry').addEventListener('input', e => {
+      let v = e.target.value.replace(/\D/g, '').slice(0, 4);
+      if (v.length >= 3) v = v.slice(0,2) + ' / ' + v.slice(2);
+      e.target.value = v;
+    });
+
+    function openAddCredits() {
+      document.getElementById('credits-modal').classList.add('open');
+    }
+
+    function closeAddCredits() {
+      document.getElementById('credits-modal').classList.remove('open');
+    }
+
+    function processPayment() {
+      const btn = document.getElementById('btn-pay');
+      const origText = btn.textContent;
+      btn.textContent = 'Processing…';
+      btn.disabled = true;
+      // Simulate a brief network delay then credit the account
+      setTimeout(() => {
+        addCredits(selectedCreditAmount);
+        btn.textContent = '✓ Credits Added!';
+        setTimeout(() => {
+          btn.textContent = origText;
+          btn.disabled = false;
+          closeAddCredits();
+          refreshCreditUI();
+        }, 1200);
+      }, 1400);
+    }
+
+    // Close modal on backdrop click
+    document.getElementById('credits-modal').addEventListener('click', e => {
+      if (e.target === document.getElementById('credits-modal')) closeAddCredits();
+    });
+
     // ── Boot ────────────────────────────────────────────────────────────────────
     (async function init() {
       renderChips();
+      refreshCreditUI();
       await Promise.all([checkHealth(), refreshTasks()]);
       setInterval(refreshTasks, 2000);
       setInterval(checkHealth, 10000);
