@@ -3,581 +3,807 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>OUTBOUND AI</title>
-  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@300;400;500;600;700&family=Figtree:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <title>ChatterAI</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
-    /* ── Tokens ───────────────────────────────────────────────────────────── */
+    /* ── Design tokens ──────────────────────────────────────────── */
     :root {
-      --bg:          #0F0F0F;
-      --surface:     #1C1C1C;
-      --surface-hi:  #252525;
-      --rule:        #2C2C2C;
-      --accent:      #3ECF8E;
-      --accent-dim:  #25855A;
-      --accent-mute: #0D2E1F;
-      --text-1:      #EDEDED;
-      --text-2:      #A0A0A0;
-      --text-3:      #525252;
-      --green:       #3ECF8E;
-      --red:         #FF4444;
-      --blue:        #4F81FF;
+      --primary:        #6e56cf;
+      --primary-hover:  #7c67d4;
+      --primary-muted:  rgba(110,86,207,0.1);
+      --bg:             #f5f5ff;
+      --sidebar-bg:     #f0f0fa;
+      --fg:             #2a2a4a;
+      --fg-2:           #6b6b8e;
+      --fg-3:           #9898b5;
+      --card:           #ffffff;
+      --border:         #e0e0f0;
+      --border-hi:      #c5c5e0;
+      --green:          #22c55e;
+      --red:            #ef4444;
+      --blue:           #3b82f6;
+      --font-sans:      'Inter', ui-sans-serif, system-ui, sans-serif;
+      --font-mono:      'JetBrains Mono', ui-monospace, monospace;
+      --sidebar-w:      264px;
+      --header-h:       56px;
+      --r:              8px;
+      --r-sm:           4px;
     }
 
-    /* ── Reset ────────────────────────────────────────────────────────────── */
+    html.dark {
+      --primary:        #a48fff;
+      --primary-hover:  #b39fff;
+      --primary-muted:  rgba(164,143,255,0.12);
+      --bg:             #0f0f1a;
+      --sidebar-bg:     #1a1a2e;
+      --fg:             #e2e2f5;
+      --fg-2:           #9898b5;
+      --fg-3:           #5a5a7a;
+      --card:           #1e1e32;
+      --border:         #2a2a45;
+      --border-hi:      #3a3a58;
+    }
+
+    /* ── Reset ──────────────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
 
     body {
       background: var(--bg);
-      color: var(--text-1);
-      font-family: 'Figtree', sans-serif;
-      min-height: 100dvh;
+      color: var(--fg);
+      font-family: var(--font-sans);
       -webkit-font-smoothing: antialiased;
+      display: flex;
+      overflow: hidden;
+      height: 100dvh;
     }
 
-    /* ── Typography helpers ───────────────────────────────────────────────── */
-    .mono { font-family: 'Chakra Petch', monospace; }
+    /* ── Sidebar ────────────────────────────────────────────────── */
+    .sidebar {
+      width: var(--sidebar-w);
+      min-width: var(--sidebar-w);
+      background: var(--sidebar-bg);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      transition: width 0.22s ease, min-width 0.22s ease;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
 
-    /* ── Header (compact, always visible) ───────────────────────────────── */
-    header {
-      max-width: 760px;
-      margin: 0 auto;
-      padding: 20px 16px 12px;
+    .sidebar.collapsed {
+      width: 48px;
+      min-width: 48px;
+    }
+
+    .sidebar-header {
+      height: var(--header-h);
       display: flex;
       align-items: center;
       justify-content: space-between;
+      padding: 0 12px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      gap: 8px;
     }
 
-    .header-wordmark {
-      font-family: 'Chakra Petch', monospace;
+    .sidebar-title {
+      font-family: var(--font-mono);
+      font-size: 10px;
       font-weight: 500;
-      font-size: 1.05rem;
-      letter-spacing: 0.15em;
-      color: var(--text-1);
+      letter-spacing: 0.14em;
       text-transform: uppercase;
+      color: var(--fg-3);
+      white-space: nowrap;
+      overflow: hidden;
+      opacity: 1;
+      transition: opacity 0.15s;
     }
 
-    body.no-tasks .header-wordmark { display: none; }
+    .sidebar.collapsed .sidebar-title { opacity: 0; pointer-events: none; }
 
-    .header-status {
-      font-family: 'Chakra Petch', monospace;
-      font-size: 0.72rem;
-      letter-spacing: 0.1em;
-      color: var(--text-2);
+    .sidebar-toggle {
+      width: 28px;
+      height: 28px;
       display: flex;
       align-items: center;
-      gap: 8px;
+      justify-content: center;
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+      cursor: pointer;
+      color: var(--fg-2);
+      flex-shrink: 0;
+      transition: background 0.12s, border-color 0.12s;
+    }
+
+    .sidebar-toggle:hover { background: var(--border); border-color: var(--border-hi); }
+    .sidebar-toggle svg { transition: transform 0.22s; }
+    .sidebar.collapsed .sidebar-toggle svg { transform: rotate(180deg); }
+
+    .sidebar-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 6px 0;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+
+    .sidebar-empty {
+      padding: 20px 12px;
+      font-size: 12px;
+      color: var(--fg-3);
+      text-align: center;
+    }
+
+    .sidebar-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 12px;
+      cursor: pointer;
+      transition: background 0.1s;
+      position: relative;
+    }
+
+    .sidebar-item:hover { background: var(--border); }
+
+    .sidebar-item.active {
+      background: var(--primary-muted);
+    }
+
+    .sidebar-item.active::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 2px;
+      background: var(--primary);
+      border-radius: 0 2px 2px 0;
+    }
+
+    .sidebar-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      margin-top: 5px;
+      background: var(--fg-3);
+    }
+
+    .sidebar-content {
+      flex: 1;
+      min-width: 0;
+      opacity: 1;
+      transition: opacity 0.15s;
+    }
+
+    .sidebar.collapsed .sidebar-content { opacity: 0; pointer-events: none; }
+
+    .sidebar-query {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--fg);
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      overflow: hidden;
+    }
+
+    .sidebar-meta {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 3px;
+    }
+
+    .sidebar-status {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      letter-spacing: 0.08em;
       text-transform: uppercase;
+      color: var(--fg-3);
+    }
+
+    .sidebar-time {
+      font-size: 10px;
+      color: var(--fg-3);
+    }
+
+    .sidebar-summary {
+      font-size: 11px;
+      color: var(--fg-2);
+      margin-top: 3px;
+      line-height: 1.35;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 1;
+      overflow: hidden;
+    }
+
+    /* Status colours (dots + labels) */
+    .dot-calling   { background: var(--primary) !important; animation: pulse-dot 1.3s ease-in-out infinite; }
+    .dot-completed { background: var(--green) !important; }
+    .dot-failed    { background: var(--red) !important; }
+    .dot-scheduled { background: var(--blue) !important; }
+
+    .lbl-calling   { color: var(--primary) !important; }
+    .lbl-completed { color: var(--green) !important; }
+    .lbl-failed    { color: var(--red) !important; }
+    .lbl-scheduled { color: var(--blue) !important; }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+
+    /* ── Main ───────────────────────────────────────────────────── */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-width: 0;
+    }
+
+    /* ── Header ─────────────────────────────────────────────────── */
+    header {
+      height: var(--header-h);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      border-bottom: 1px solid var(--border);
+      background: var(--card);
+      flex-shrink: 0;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .wordmark {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      color: var(--fg);
+    }
+
+    .wordmark .accent { color: var(--primary); }
+
+    .header-pill {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      background: var(--primary-muted);
+      border-radius: 100px;
+      padding: 3px 10px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      color: var(--primary);
     }
 
     #health-dot {
-      width: 7px;
-      height: 7px;
+      width: 5px;
+      height: 5px;
       border-radius: 50%;
       background: var(--green);
       flex-shrink: 0;
       transition: background 0.3s;
     }
 
-    #health-dot.err { background: var(--red); }
+    #health-dot.err     { background: var(--red); }
+    #health-dot.calling { background: var(--primary); animation: pulse-dot 1.3s ease-in-out infinite; }
 
-    .header-rule {
-      max-width: 760px;
-      margin: 0 auto 0;
-      height: 1px;
-      background: var(--rule);
-    }
-
-    body.no-tasks .header-rule { display: none; }
-
-    /* ── Hero layout (empty state) ───────────────────────────────────────── */
-    .hero-wrap {
-      max-width: 680px;
-      margin: 0 auto;
-      padding: 80px 16px 0;
+    .header-right {
       display: flex;
-      flex-direction: column;
       align-items: center;
-      gap: 28px;
+      gap: 10px;
     }
 
-    body.has-tasks .hero-wrap { display: none; }
+    .user-email {
+      font-size: 12px;
+      color: var(--fg-2);
+    }
+
+    .icon-btn {
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+      cursor: pointer;
+      color: var(--fg-2);
+      font-size: 14px;
+      transition: background 0.12s, border-color 0.12s;
+    }
+
+    .icon-btn:hover { background: var(--border); border-color: var(--border-hi); }
+
+    .btn-signout {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+      color: var(--fg-2);
+      padding: 5px 12px;
+      cursor: pointer;
+      transition: border-color 0.12s, color 0.12s;
+    }
+
+    .btn-signout:hover { border-color: var(--border-hi); color: var(--fg); }
+
+    /* ── Scroll area ─────────────────────────────────────────────── */
+    .scroll-area {
+      flex: 1;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+
+    .content {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 0 20px 48px;
+      width: 100%;
+    }
+
+    /* ── Hero ────────────────────────────────────────────────────── */
+    .hero {
+      text-align: center;
+      padding: 56px 0 32px;
+      transition: padding 0.2s;
+    }
+
+    .hero.compact { padding: 28px 0 20px; }
+
+    .hero-eyebrow {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--primary);
+      margin-bottom: 12px;
+    }
 
     .hero-title {
-      font-family: 'Chakra Petch', monospace;
-      font-size: 2.4rem;
+      font-size: 2rem;
       font-weight: 600;
-      letter-spacing: 0.08em;
-      color: var(--text-1);
-      text-align: center;
+      color: var(--fg);
+      margin-bottom: 8px;
+      line-height: 1.2;
     }
 
-    .hero-accent {
-      color: var(--accent);
-    }
+    .hero-title .accent { color: var(--primary); }
 
     .hero-subtitle {
-      font-family: 'Figtree', sans-serif;
-      font-size: 1.05rem;
-      color: var(--text-2);
-      text-align: center;
+      font-size: 15px;
+      color: var(--fg-2);
+      max-width: 380px;
+      margin: 0 auto;
       line-height: 1.6;
-      max-width: 460px;
-      margin-top: -8px;
     }
 
-    .hero-input-wrap {
-      width: 100%;
-      background: var(--surface);
-      border: 1px solid var(--rule);
-      border-radius: 10px;
-      padding: 4px;
-      transition: border-color 0.18s, box-shadow 0.18s;
+    .hero.compact .hero-eyebrow,
+    .hero.compact .hero-subtitle { display: none; }
+
+    /* ── Agent selector ──────────────────────────────────────────── */
+    .agent-section { margin-top: 28px; }
+
+    .section-label {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--fg-3);
+      margin-bottom: 10px;
     }
 
-    .hero-input-wrap:focus-within {
-      border-color: var(--accent-dim);
-      box-shadow: 0 0 0 3px var(--accent-mute);
+    .agent-grid {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
     }
 
-    textarea#hero-input {
+    .agent-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 16px;
+      background: var(--card);
+      border: 1.5px solid var(--border);
+      border-radius: var(--r);
+      cursor: pointer;
+      color: var(--fg);
+      position: relative;
+      overflow: hidden;
+      user-select: none;
+      transition: border-color 0.15s, background 0.15s, transform 0.12s, box-shadow 0.15s;
+    }
+
+    .agent-btn::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: var(--primary);
+      opacity: 0;
+      transition: opacity 0.15s;
+      pointer-events: none;
+    }
+
+    .agent-btn:hover {
+      border-color: var(--primary);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 14px rgba(110,86,207,0.18);
+    }
+
+    .agent-btn:hover::after { opacity: 0.06; }
+    .agent-btn:active { transform: translateY(0); }
+
+    .agent-btn.selected {
+      border-color: var(--primary);
+      background: var(--primary-muted);
+    }
+
+    .agent-btn.selected::after { opacity: 0.05; }
+
+    .agent-icon {
+      font-size: 16px;
+      position: relative;
+      z-index: 1;
+      line-height: 1;
+    }
+
+    .agent-label {
+      font-size: 13px;
+      font-weight: 500;
+      position: relative;
+      z-index: 1;
+      white-space: nowrap;
+      color: var(--fg);
+      transition: color 0.15s;
+    }
+
+    .agent-btn.selected .agent-label { color: var(--primary); }
+
+    /* ── Input card ──────────────────────────────────────────────── */
+    .input-section { margin-top: 20px; }
+
+    .input-card {
+      background: var(--card);
+      border: 1.5px solid var(--border);
+      border-radius: var(--r);
+      overflow: hidden;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+
+    .input-card:focus-within {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(110,86,207,0.12);
+    }
+
+    html.dark .input-card:focus-within {
+      box-shadow: 0 0 0 3px rgba(164,143,255,0.15);
+    }
+
+    textarea#main-input {
       width: 100%;
       background: transparent;
       border: none;
       outline: none;
       resize: none;
-      color: var(--text-1);
-      font-family: 'Figtree', sans-serif;
-      font-size: 1rem;
+      color: var(--fg);
+      font-family: var(--font-sans);
+      font-size: 15px;
       line-height: 1.6;
       min-height: 80px;
-      padding: 16px 16px 8px;
+      padding: 16px 20px 8px;
       field-sizing: content;
     }
 
-    textarea#hero-input::placeholder {
-      color: var(--text-3);
-    }
+    textarea#main-input::placeholder { color: var(--fg-3); }
 
-    .hero-input-footer {
+    .input-footer {
       display: flex;
       align-items: center;
-      justify-content: flex-end;
-      padding: 6px 10px;
+      padding: 8px 12px;
       gap: 10px;
     }
 
-    #hero-error {
+    .input-hint {
+      font-size: 11px;
+      color: var(--fg-3);
+      font-family: var(--font-mono);
       flex: 1;
-      font-size: 0.78rem;
+    }
+
+    #submit-error {
+      font-size: 12px;
       color: var(--red);
-      min-height: 16px;
+      font-family: var(--font-mono);
     }
 
-    #hero-submit-btn {
-      font-family: 'Chakra Petch', monospace;
-      font-size: 0.72rem;
-      font-weight: 600;
-      letter-spacing: 0.1em;
+    .btn-submit {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
       text-transform: uppercase;
-      background: var(--accent);
-      color: #0a0a0a;
+      background: var(--primary);
+      color: #fff;
       border: none;
-      border-radius: 6px;
-      padding: 10px 26px;
+      border-radius: var(--r-sm);
+      padding: 8px 20px;
       cursor: pointer;
-      transition: background 0.15s, opacity 0.15s;
       white-space: nowrap;
+      flex-shrink: 0;
+      transition: background 0.12s, opacity 0.12s, transform 0.1s;
     }
 
-    #hero-submit-btn:hover:not(:disabled) { background: #5ADBA0; }
-    #hero-submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .btn-submit:hover:not(:disabled) { background: var(--primary-hover); transform: translateY(-1px); }
+    .btn-submit:active { transform: translateY(0); }
+    .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    /* ── Example chips ────────────────────────────────────────────────────── */
-    .chips-label {
-      font-family: 'Chakra Petch', monospace;
-      font-size: 0.62rem;
-      letter-spacing: 0.18em;
-      color: var(--text-3);
-      text-transform: uppercase;
-      text-align: center;
-    }
+    /* ── Chips ───────────────────────────────────────────────────── */
+    .chips-section { margin-top: 14px; }
 
     .chips-wrap {
       display: flex;
       flex-wrap: wrap;
-      gap: 8px;
-      justify-content: center;
-      width: 100%;
+      gap: 6px;
     }
 
     .example-chip {
-      font-family: 'Figtree', sans-serif;
-      font-size: 0.82rem;
-      color: var(--text-2);
-      background: var(--surface);
-      border: 1px solid var(--rule);
-      border-radius: 20px;
-      padding: 7px 18px;
+      font-size: 12px;
+      color: var(--fg-2);
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 100px;
+      padding: 5px 14px;
       cursor: pointer;
-      transition: border-color 0.15s, color 0.15s, background 0.15s;
+      transition: border-color 0.12s, color 0.12s, background 0.12s;
     }
 
     .example-chip:hover {
-      border-color: var(--accent-dim);
-      color: var(--text-1);
-      background: var(--surface-hi);
+      border-color: var(--primary);
+      color: var(--primary);
+      background: var(--primary-muted);
     }
 
-    /* ── Compact input (has-tasks) ───────────────────────────────────────── */
-    .compact-wrap {
-      max-width: 760px;
-      margin: 24px auto 0;
-      padding: 0 16px;
-    }
+    /* ── Tasks section ───────────────────────────────────────────── */
+    .tasks-section { margin-top: 32px; }
 
-    body.no-tasks .compact-wrap { display: none; }
-    body.no-tasks .calls-section { display: none; }
-
-    textarea#request-input {
-      width: 100%;
-      background: var(--surface);
-      border: 1px solid var(--rule);
-      border-radius: 6px;
-      outline: none;
-      resize: vertical;
-      color: var(--text-1);
-      font-family: 'Figtree', sans-serif;
-      font-size: 0.92rem;
-      line-height: 1.6;
-      min-height: 64px;
-      padding: 14px 16px;
-      transition: border-color 0.18s;
-      field-sizing: content;
-    }
-
-    textarea#request-input::placeholder {
-      color: var(--text-3);
-      font-family: 'Figtree', sans-serif;
-    }
-
-    textarea#request-input:focus { border-color: var(--accent-dim); }
-
-    .dispatch-footer {
+    .tasks-header {
       display: flex;
       align-items: center;
-      justify-content: flex-end;
-      gap: 12px;
-      margin-top: 10px;
+      justify-content: space-between;
+      margin-bottom: 12px;
     }
 
-    #submit-error {
-      flex: 1;
-      font-family: 'Figtree', sans-serif;
-      font-size: 0.78rem;
-      color: var(--red);
-      min-height: 16px;
+    /* ── Task card ───────────────────────────────────────────────── */
+    .task-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      overflow: hidden;
+      margin-bottom: 10px;
+      transition: border-color 0.15s, box-shadow 0.15s;
     }
 
-    #submit-btn {
-      font-family: 'Chakra Petch', monospace;
-      font-size: 0.72rem;
-      font-weight: 600;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      background: var(--accent);
-      color: #0a0a0a;
-      border: none;
-      border-radius: 4px;
-      padding: 10px 24px;
-      cursor: pointer;
-      transition: background 0.15s, transform 0.1s, opacity 0.15s;
-      white-space: nowrap;
-      flex-shrink: 0;
+    .task-card:hover { border-color: var(--border-hi); }
+
+    .task-card.s-calling {
+      border-color: rgba(110,86,207,0.4);
+      box-shadow: 0 0 0 1px rgba(110,86,207,0.08);
     }
 
-    #submit-btn:hover:not(:disabled) { background: #5ADBA0; }
-    #submit-btn:active:not(:disabled) { transform: scale(0.97); }
-    #submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-
-    /* ── Calls section ────────────────────────────────────────────────────── */
-    .calls-section {
-      max-width: 760px;
-      margin: 36px auto 64px;
-      padding: 0 16px;
+    html.dark .task-card.s-calling {
+      border-color: rgba(164,143,255,0.35);
     }
 
-    .calls-label {
-      font-family: 'Chakra Petch', monospace;
-      font-size: 0.68rem;
-      letter-spacing: 0.2em;
-      color: var(--text-3);
-      text-transform: uppercase;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 0;
-    }
-
-    .calls-label-line {
-      flex: 1;
-      height: 1px;
-      background: var(--rule);
-    }
-
-    /* ── Task rows ────────────────────────────────────────────────────────── */
-    #task-list {
-      border-top: 1px solid var(--rule);
-      margin-top: 12px;
-    }
-
-    .task-row {
-      border-bottom: 1px solid var(--rule);
-      cursor: pointer;
-      position: relative;
-    }
-
-    .task-row:hover .task-main { background: var(--surface); }
-
-    .task-main {
+    .task-card-header {
       display: grid;
-      grid-template-columns: 108px 1fr auto auto;
+      grid-template-columns: auto 1fr auto auto auto;
       align-items: center;
-      gap: 16px;
-      padding: 13px 4px;
-      transition: background 0.12s;
+      gap: 12px;
+      padding: 12px 16px;
+      cursor: pointer;
     }
 
-    /* Status cell */
-    .task-status {
+    .task-status-pill {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 5px;
+      padding: 3px 9px;
+      border-radius: 100px;
+      background: var(--border);
       flex-shrink: 0;
     }
+
+    .task-card.s-calling .task-status-pill { background: var(--primary-muted); }
 
     .status-dot {
-      width: 7px;
-      height: 7px;
+      width: 5px;
+      height: 5px;
       border-radius: 50%;
+      background: var(--fg-3);
       flex-shrink: 0;
     }
 
     .status-label {
-      font-family: 'Chakra Petch', monospace;
-      font-size: 0.66rem;
-      letter-spacing: 0.12em;
+      font-family: var(--font-mono);
+      font-size: 9px;
+      letter-spacing: 0.1em;
       text-transform: uppercase;
+      color: var(--fg-3);
     }
 
-    .task-row.s-calling   .status-dot   { background: var(--accent); }
-    .task-row.s-calling   .status-label { color: var(--accent); }
-    .task-row.s-completed .status-dot   { background: var(--green); }
-    .task-row.s-completed .status-label { color: var(--green); }
-    .task-row.s-failed    .status-dot   { background: var(--red); }
-    .task-row.s-failed    .status-label { color: var(--red); }
-    .task-row.s-pending   .status-dot   { background: var(--text-3); }
-    .task-row.s-pending   .status-label { color: var(--text-3); }
-    .task-row.s-scheduled .status-dot   { background: var(--blue); }
-    .task-row.s-scheduled .status-label { color: var(--blue); }
-    .task-row.s-cancelled .status-dot   { background: var(--text-3); }
-    .task-row.s-cancelled .status-label { color: var(--text-3); }
+    .task-info-text { min-width: 0; }
 
-    @keyframes pulse-green {
-      0%, 100% { opacity: 1; }
-      50%       { opacity: 0.3; }
-    }
-
-    .task-row.s-calling .status-dot { animation: pulse-green 1.2s ease-in-out infinite; }
-
-    /* Phone + description cell */
-    .task-info {
-      display: flex;
-      align-items: baseline;
-      gap: 14px;
-      min-width: 0;
-    }
-
-    .task-phone {
-      font-family: 'Figtree', sans-serif;
-      font-size: 0.88rem;
+    .task-request {
+      font-size: 13px;
       font-weight: 500;
-      color: var(--text-1);
-      white-space: nowrap;
-      flex-shrink: 0;
-    }
-
-    .task-desc {
-      font-family: 'Figtree', sans-serif;
-      font-size: 0.84rem;
-      color: var(--text-2);
+      color: var(--fg);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
 
-    .task-row.s-cancelled .task-desc { text-decoration: line-through; color: var(--text-3); }
-
-    .task-inline-result {
-      font-family: 'Chakra Petch', monospace;
-      font-size: 0.66rem;
-      letter-spacing: 0.05em;
-      white-space: nowrap;
+    .task-sub {
+      font-size: 11px;
+      color: var(--fg-2);
+      margin-top: 1px;
       overflow: hidden;
       text-overflow: ellipsis;
-      max-width: 200px;
-      flex-shrink: 0;
+      white-space: nowrap;
     }
 
-    .task-row.s-completed .task-inline-result { color: var(--green); }
-    .task-row.s-failed    .task-inline-result { color: var(--red); }
+    .agent-chip {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 2px 8px;
+      border-radius: 100px;
+      border: 1px solid var(--border);
+      color: var(--fg-2);
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+
+    .agent-chip.food_ordering            { color: #f59e0b; border-color: rgba(245,158,11,0.35); background: rgba(245,158,11,0.08); }
+    .agent-chip.appointment_booking      { color: var(--blue); border-color: rgba(59,130,246,0.35); background: rgba(59,130,246,0.08); }
+    .agent-chip.general_customer_service { color: var(--green); border-color: rgba(34,197,94,0.35); background: rgba(34,197,94,0.08); }
+    .agent-chip.insurance_calls          { color: #a855f7; border-color: rgba(168,85,247,0.35); background: rgba(168,85,247,0.08); }
 
     .task-time {
-      font-family: 'Chakra Petch', monospace;
-      font-size: 0.65rem;
-      color: var(--text-3);
-      text-align: right;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--fg-3);
       white-space: nowrap;
       flex-shrink: 0;
     }
 
     .task-cancel {
-      font-size: 0.85rem;
-      color: var(--text-3);
       background: none;
       border: none;
       cursor: pointer;
-      padding: 0 4px;
+      color: var(--fg-3);
+      font-size: 16px;
       line-height: 1;
+      padding: 2px 4px;
+      border-radius: var(--r-sm);
       opacity: 0;
-      transition: opacity 0.15s, color 0.15s;
+      transition: opacity 0.12s, color 0.12s;
       flex-shrink: 0;
     }
 
-    .task-row:hover .task-cancel { opacity: 1; }
+    .task-card:hover .task-cancel { opacity: 1; }
     .task-cancel:hover { color: var(--red); }
 
-    /* ── Agent badge ─────────────────────────────────────────────────────── */
-    .agent-badge {
-      font-family: 'Chakra Petch', monospace;
-      font-size: 0.58rem;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      padding: 2px 8px;
-      border-radius: 3px;
-      border: 1px solid var(--rule);
-      color: var(--text-3);
-      flex-shrink: 0;
-      white-space: nowrap;
-    }
-
-    .agent-badge.agent-food_ordering         { border-color: #B45309; color: #FBBF24; }
-    .agent-badge.agent-appointment_booking   { border-color: #1D4ED8; color: #60A5FA; }
-    .agent-badge.agent-general_customer_service { border-color: #7C3AED; color: #A78BFA; }
-    .agent-badge.agent-insurance_calls       { border-color: #065F46; color: #34D399; }
-
-    /* ── Progress bar ─────────────────────────────────────────────────────── */
-    .task-progress {
-      height: 2px;
-      background: var(--rule);
-      overflow: hidden;
-    }
+    /* Progress bar */
+    .task-progress { height: 2px; background: var(--border); }
 
     .task-progress-fill {
       height: 100%;
-      background: var(--accent);
+      background: var(--primary);
       width: 0%;
       transition: width 2s linear;
     }
 
-    .task-row.s-completed .task-progress-fill { background: var(--green); }
-    .task-row.s-failed    .task-progress-fill { background: var(--red); }
+    .task-card.s-completed .task-progress-fill { background: var(--green); width: 100%; }
+    .task-card.s-failed    .task-progress-fill { background: var(--red);   width: 100%; }
 
-    /* ── Transcript expand ────────────────────────────────────────────────── */
+    /* Transcript expand */
     .transcript-wrap {
       display: grid;
       grid-template-rows: 0fr;
-      transition: grid-template-rows 0.25s ease;
+      transition: grid-template-rows 0.22s ease;
     }
 
     .transcript-wrap.open { grid-template-rows: 1fr; }
-
     .transcript-inner { overflow: hidden; }
 
     .transcript-body {
-      background: var(--surface);
+      border-top: 1px solid var(--border);
       padding: 16px 20px 20px;
-      margin-bottom: 1px;
     }
 
-    .transcript-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 14px;
-      border-bottom: 1px solid var(--rule);
-      padding-bottom: 10px;
-    }
-
-    .transcript-header-label {
-      font-family: 'Chakra Petch', monospace;
-      font-size: 0.62rem;
-      letter-spacing: 0.2em;
-      color: var(--accent);
-      text-transform: uppercase;
-    }
-
-    .transcript-line-count {
-      font-family: 'Chakra Petch', monospace;
-      font-size: 0.62rem;
-      letter-spacing: 0.08em;
-      color: var(--text-3);
-    }
-
-    .transcript-lines {
+    /* Chat bubbles */
+    .chat-messages {
       display: flex;
       flex-direction: column;
       gap: 10px;
-      max-height: 320px;
+      max-height: 360px;
       overflow-y: auto;
+      padding: 2px 0;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
     }
 
-    .transcript-lines::-webkit-scrollbar { width: 3px; }
-    .transcript-lines::-webkit-scrollbar-track { background: transparent; }
-    .transcript-lines::-webkit-scrollbar-thumb { background: var(--rule); }
-
-    .transcript-line {
-      display: grid;
-      grid-template-columns: 52px 1fr;
-      gap: 12px;
-      align-items: baseline;
+    .chat-message {
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
     }
 
-    .tl-role {
-      font-family: 'Chakra Petch', monospace;
-      font-size: 0.62rem;
-      letter-spacing: 0.1em;
-      color: var(--text-3);
-      text-transform: uppercase;
-      padding-top: 1px;
+    .chat-message.user { flex-direction: row-reverse; }
+
+    .chat-avatar {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      font-family: var(--font-mono);
+      font-weight: 500;
       flex-shrink: 0;
     }
 
-    .tl-role.agent { color: var(--accent); }
+    .chat-message.agent .chat-avatar { background: var(--primary-muted); color: var(--primary); }
+    .chat-message.user  .chat-avatar { background: var(--border); color: var(--fg-2); }
 
-    .tl-content {
-      font-family: 'Figtree', sans-serif;
-      font-size: 0.88rem;
-      color: var(--text-1);
-      line-height: 1.55;
+    .chat-bubble {
+      max-width: 76%;
+      padding: 9px 14px;
+      font-size: 13px;
+      line-height: 1.5;
       word-break: break-word;
+      border-radius: 16px;
+    }
+
+    .chat-message.agent .chat-bubble {
+      background: var(--primary-muted);
+      color: var(--fg);
+      border-bottom-left-radius: 4px;
+    }
+
+    .chat-message.user .chat-bubble {
+      background: var(--border);
+      color: var(--fg);
+      border-bottom-right-radius: 4px;
     }
 
     .transcript-cursor {
       display: inline-block;
-      color: var(--accent);
+      color: var(--primary);
       animation: blink-cursor 0.9s step-end infinite;
       margin-left: 2px;
-      font-size: 0.9em;
     }
 
     @keyframes blink-cursor {
@@ -585,45 +811,52 @@
       50%       { opacity: 0; }
     }
 
+    .transcript-empty-msg {
+      font-size: 13px;
+      color: var(--fg-3);
+      text-align: center;
+      padding: 20px 0;
+    }
+
     .transcript-result {
       margin-top: 14px;
-      padding-top: 12px;
-      border-top: 1px solid var(--rule);
-      font-family: 'Chakra Petch', monospace;
-      font-size: 0.7rem;
-      letter-spacing: 0.08em;
-      color: var(--accent);
+      padding: 10px 14px;
+      border-radius: var(--r-sm);
+      font-size: 12px;
+      font-family: var(--font-mono);
+      background: rgba(34,197,94,0.08);
+      border: 1px solid rgba(34,197,94,0.25);
+      color: var(--green);
     }
 
-    .transcript-empty-msg {
-      font-family: 'Figtree', sans-serif;
-      font-size: 0.82rem;
-      color: var(--text-3);
-      padding: 8px 0;
+    .transcript-result.failed {
+      background: rgba(239,68,68,0.08);
+      border-color: rgba(239,68,68,0.25);
+      color: var(--red);
     }
 
-    /* ── Mark Complete ────────────────────────────────────────────────────── */
+    /* Mark complete */
     .mark-complete-wrap {
       margin-top: 14px;
       padding-top: 12px;
-      border-top: 1px solid var(--rule);
+      border-top: 1px solid var(--border);
     }
 
     .mark-complete-btn {
-      font-family: 'Chakra Petch', monospace;
-      font-size: 0.65rem;
-      letter-spacing: 0.1em;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.08em;
       text-transform: uppercase;
       background: transparent;
-      border: 1px solid var(--rule);
-      color: var(--text-2);
-      padding: 6px 16px;
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+      color: var(--fg-2);
+      padding: 6px 14px;
       cursor: pointer;
-      border-radius: 3px;
-      transition: border-color 0.15s, color 0.15s;
+      transition: border-color 0.12s, color 0.12s;
     }
 
-    .mark-complete-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .mark-complete-btn:hover { border-color: var(--primary); color: var(--primary); }
 
     .mark-complete-input-wrap {
       display: none;
@@ -633,106 +866,976 @@
 
     .mark-complete-input {
       flex: 1;
-      background: var(--surface-hi);
-      border: 1px solid var(--rule);
-      color: var(--text-1);
-      font-family: 'Figtree', sans-serif;
-      font-size: 0.85rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+      color: var(--fg);
+      font-family: var(--font-sans);
+      font-size: 13px;
       padding: 7px 12px;
-      border-radius: 3px;
       outline: none;
-      transition: border-color 0.15s;
+      transition: border-color 0.12s;
     }
 
-    .mark-complete-input:focus { border-color: var(--accent-dim); }
+    .mark-complete-input:focus { border-color: var(--primary); }
 
     .mark-complete-confirm {
-      font-family: 'Chakra Petch', monospace;
-      font-size: 0.65rem;
+      font-family: var(--font-mono);
+      font-size: 10px;
       letter-spacing: 0.08em;
       text-transform: uppercase;
-      background: var(--accent);
-      color: #0a0a0a;
+      background: var(--primary);
+      color: #fff;
       border: none;
-      padding: 7px 18px;
+      border-radius: var(--r-sm);
+      padding: 7px 16px;
       cursor: pointer;
-      border-radius: 3px;
+      white-space: nowrap;
+      transition: background 0.12s;
+    }
+
+    .mark-complete-confirm:hover { background: var(--primary-hover); }
+
+    /* ── Sidebar footer ──────────────────────────────────────────── */
+    .sidebar-footer {
+      border-top: 1px solid var(--border);
+      padding: 10px 8px;
+      flex-shrink: 0;
+    }
+
+    .sidebar-footer-btn {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 8px 10px;
+      background: none;
+      border: none;
+      border-radius: var(--r-sm);
+      cursor: pointer;
+      color: var(--fg-2);
+      transition: background 0.12s, color 0.12s;
+      text-align: left;
+    }
+
+    .sidebar-footer-btn:hover { background: var(--border); color: var(--fg); }
+
+    .sidebar-footer-btn svg { flex-shrink: 0; }
+
+    .sidebar-footer-label {
+      font-size: 13px;
+      font-weight: 500;
+      opacity: 1;
+      transition: opacity 0.15s;
       white-space: nowrap;
     }
 
-    .mark-complete-confirm:hover { background: #5ADBA0; }
+    .sidebar.collapsed .sidebar-footer-label { opacity: 0; pointer-events: none; }
+
+    /* Credit mini-bar in sidebar footer */
+    .credit-mini {
+      padding: 8px 10px 2px;
+      opacity: 1;
+      transition: opacity 0.15s;
+    }
+
+    .sidebar.collapsed .credit-mini { opacity: 0; pointer-events: none; }
+
+    .credit-mini-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 5px;
+    }
+
+    .credit-mini-label {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--fg-3);
+    }
+
+    .credit-mini-value {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--fg);
+    }
+
+    .credit-mini-value.low { color: var(--red); }
+
+    .credit-bar {
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .credit-bar-fill {
+      height: 100%;
+      background: var(--primary);
+      border-radius: 2px;
+      transition: width 0.4s ease;
+    }
+
+    .credit-bar-fill.low { background: var(--red); }
+
+    /* ── Header credit badge ─────────────────────────────────────── */
+    .credit-badge {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      background: var(--primary-muted);
+      border: 1px solid rgba(110,86,207,0.2);
+      border-radius: 100px;
+      padding: 3px 10px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--primary);
+      cursor: pointer;
+      transition: background 0.12s, border-color 0.12s;
+      white-space: nowrap;
+    }
+
+    .credit-badge:hover { background: rgba(110,86,207,0.18); }
+    .credit-badge.low { color: var(--red); background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.25); }
+    html.dark .credit-badge { border-color: rgba(164,143,255,0.2); }
+
+    /* ── Settings panel ──────────────────────────────────────────── */
+    .settings-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      display: flex;
+      align-items: stretch;
+      justify-content: flex-end;
+      pointer-events: none;
+    }
+
+    .settings-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.35);
+      opacity: 0;
+      transition: opacity 0.22s;
+      pointer-events: none;
+    }
+
+    .settings-panel {
+      position: relative;
+      width: 420px;
+      max-width: 100vw;
+      background: var(--card);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      transform: translateX(100%);
+      transition: transform 0.26s cubic-bezier(0.4,0,0.2,1);
+      pointer-events: none;
+      overflow: hidden;
+    }
+
+    .settings-overlay.open .settings-backdrop { opacity: 1; pointer-events: all; }
+    .settings-overlay.open .settings-panel   { transform: translateX(0); pointer-events: all; }
+
+    .settings-head {
+      height: var(--header-h);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .settings-title {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--fg);
+    }
+
+    .settings-close {
+      width: 30px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+      cursor: pointer;
+      color: var(--fg-2);
+      font-size: 16px;
+      transition: background 0.12s;
+    }
+
+    .settings-close:hover { background: var(--border); color: var(--fg); }
+
+    .settings-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+
+    .settings-section-title {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--fg-3);
+      margin-bottom: 12px;
+    }
+
+    /* Profile card */
+    .profile-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .profile-avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: var(--primary-muted);
+      border: 2px solid var(--primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-mono);
+      font-size: 16px;
+      font-weight: 500;
+      color: var(--primary);
+      flex-shrink: 0;
+      text-transform: uppercase;
+    }
+
+    .profile-info { flex: 1; min-width: 0; }
+
+    .profile-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--fg);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .profile-email {
+      font-size: 12px;
+      color: var(--fg-2);
+      margin-top: 2px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .profile-badge {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 2px 8px;
+      border-radius: 100px;
+      background: var(--primary-muted);
+      color: var(--primary);
+      border: 1px solid rgba(110,86,207,0.2);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    /* Billing card */
+    .billing-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      overflow: hidden;
+    }
+
+    .billing-balance {
+      padding: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .balance-label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--fg-3);
+      margin-bottom: 8px;
+    }
+
+    .balance-amount {
+      font-size: 36px;
+      font-weight: 600;
+      color: var(--fg);
+      line-height: 1;
+      font-family: var(--font-mono);
+      letter-spacing: -0.02em;
+    }
+
+    .balance-amount .cents { font-size: 20px; color: var(--fg-2); }
+    .balance-amount.low { color: var(--red); }
+
+    .balance-sub {
+      font-size: 12px;
+      color: var(--fg-2);
+      margin-top: 6px;
+    }
+
+    .balance-bar-wrap {
+      margin-top: 14px;
+    }
+
+    .balance-bar {
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .balance-bar-fill {
+      height: 100%;
+      background: var(--primary);
+      border-radius: 3px;
+      transition: width 0.5s ease;
+    }
+
+    .balance-bar-fill.low { background: var(--red); }
+
+    .balance-bar-labels {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 5px;
+    }
+
+    .balance-bar-labels span {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      color: var(--fg-3);
+    }
+
+    .billing-pricing {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .pricing-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 0;
+    }
+
+    .pricing-row + .pricing-row { border-top: 1px solid var(--border); }
+
+    .pricing-label {
+      font-size: 13px;
+      color: var(--fg-2);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .pricing-value {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--fg);
+    }
+
+    .billing-cta {
+      padding: 14px 20px;
+    }
+
+    .btn-add-credits {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 12px;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: var(--r-sm);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.12s, transform 0.1s;
+    }
+
+    .btn-add-credits:hover { background: var(--primary-hover); transform: translateY(-1px); }
+    .btn-add-credits:active { transform: translateY(0); }
+
+    /* Usage history */
+    .usage-list {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      overflow: hidden;
+    }
+
+    .usage-empty {
+      padding: 20px;
+      font-size: 12px;
+      color: var(--fg-3);
+      text-align: center;
+    }
+
+    .usage-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .usage-row:last-child { border-bottom: none; }
+
+    .usage-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      flex-shrink: 0;
+    }
+
+    .usage-text {
+      flex: 1;
+      min-width: 0;
+      font-size: 12px;
+      color: var(--fg);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .usage-cost {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--red);
+      flex-shrink: 0;
+    }
+
+    .usage-time {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--fg-3);
+      flex-shrink: 0;
+    }
+
+    /* ── Add Credits modal ───────────────────────────────────────── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(0,0,0,0.5);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.18s;
+    }
+
+    .modal-overlay.open { opacity: 1; pointer-events: all; }
+
+    .modal {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      width: 100%;
+      max-width: 380px;
+      overflow: hidden;
+      transform: translateY(12px);
+      transition: transform 0.2s;
+    }
+
+    .modal-overlay.open .modal { transform: translateY(0); }
+
+    .modal-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .modal-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--fg);
+    }
+
+    .modal-close {
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+      cursor: pointer;
+      color: var(--fg-2);
+      font-size: 14px;
+      transition: background 0.12s;
+    }
+
+    .modal-close:hover { background: var(--border); }
+
+    .modal-body { padding: 20px; }
+
+    .credit-options {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .credit-option {
+      padding: 12px 8px;
+      background: var(--bg);
+      border: 1.5px solid var(--border);
+      border-radius: var(--r-sm);
+      cursor: pointer;
+      text-align: center;
+      transition: border-color 0.12s, background 0.12s;
+    }
+
+    .credit-option:hover { border-color: var(--primary); }
+    .credit-option.selected { border-color: var(--primary); background: var(--primary-muted); }
+
+    .credit-option-amount {
+      font-family: var(--font-mono);
+      font-size: 16px;
+      font-weight: 500;
+      color: var(--fg);
+    }
+
+    .credit-option.selected .credit-option-amount { color: var(--primary); }
+
+    .credit-option-calls {
+      font-size: 10px;
+      color: var(--fg-3);
+      margin-top: 3px;
+    }
+
+    .modal-input-group {
+      margin-bottom: 12px;
+    }
+
+    .modal-label {
+      display: block;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--fg-2);
+      margin-bottom: 6px;
+      font-family: var(--font-mono);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .modal-input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+      color: var(--fg);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      padding: 9px 12px;
+      outline: none;
+      transition: border-color 0.12s;
+    }
+
+    .modal-input:focus { border-color: var(--primary); }
+
+    .modal-card-row {
+      display: grid;
+      grid-template-columns: 1fr 80px;
+      gap: 8px;
+    }
+
+    .modal-note {
+      font-size: 11px;
+      color: var(--fg-3);
+      text-align: center;
+      margin-top: 10px;
+      line-height: 1.5;
+    }
+
+    .modal-foot {
+      padding: 0 20px 20px;
+    }
+
+    .btn-pay {
+      width: 100%;
+      padding: 12px;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: var(--r-sm);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+
+    .btn-pay:hover { background: var(--primary-hover); }
+
+    /* ── Responsive ──────────────────────────────────────────────── */
+    @media (max-width: 600px) {
+      .sidebar { display: none; }
+      .agent-label { display: none; }
+      .agent-btn { padding: 10px 12px; }
+      .user-email { display: none; }
+      .credit-badge span { display: none; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .transcript-cursor, #health-dot.calling,
+      .dot-calling, .status-dot { animation: none !important; }
+    }
   </style>
 </head>
-<body class="no-tasks">
+<body>
 
-  <!-- Header (compact mode only) -->
-  <header>
-    <span class="header-wordmark">OUTBOUND AI</span>
-    <div class="header-status">
-      <div id="health-dot"></div>
-      <span id="health-label">0 ACTIVE</span>
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <span class="sidebar-title">History</span>
+      <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Toggle sidebar">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 2L4 7l5 5"/>
+        </svg>
+      </button>
     </div>
-  </header>
-  <div class="header-rule"></div>
+    <div class="sidebar-list" id="sidebar-list">
+      <div class="sidebar-empty">No calls yet</div>
+    </div>
+    <div class="sidebar-footer">
+      <div class="credit-mini" id="credit-mini">
+        <div class="credit-mini-row">
+          <span class="credit-mini-label">Credits</span>
+          <span class="credit-mini-value" id="credit-mini-value">$5.00</span>
+        </div>
+        <div class="credit-bar">
+          <div class="credit-bar-fill" id="credit-mini-bar" style="width:100%"></div>
+        </div>
+      </div>
+      <button class="sidebar-footer-btn" onclick="openSettings()">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="8" cy="8" r="2.5"/>
+          <path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3.05 3.05l1.06 1.06M11.89 11.89l1.06 1.06M3.05 12.95l1.06-1.06M11.89 4.11l1.06-1.06"/>
+        </svg>
+        <span class="sidebar-footer-label">Settings</span>
+      </button>
+    </div>
+  </aside>
 
-  <!-- Hero (empty state) -->
-  <div class="hero-wrap">
-    <div class="hero-title">OUTBOUND <span class="hero-accent">AI</span></div>
-    <div class="hero-subtitle">Tell it what you need done. It makes the call.</div>
-    <div class="hero-input-wrap">
-      <textarea
-        id="hero-input"
-        placeholder='e.g. "Order a large taro boba for pickup at 5pm from the nearest boba shop in SF" or "Call +1-650-555-1234 and book a haircut for Saturday"'
-      ></textarea>
-      <div class="hero-input-footer">
-        <div id="hero-error"></div>
-        <button id="hero-submit-btn" type="button">EXECUTE →</button>
+  <!-- Main -->
+  <div class="main">
+    <header>
+      <div class="header-left">
+        <span class="wordmark">CHATTER<span class="accent">AI</span></span>
+        <div class="header-pill">
+          <div id="health-dot"></div>
+          <span id="health-label">0 active</span>
+        </div>
+      </div>
+      <div class="header-right">
+        <span class="user-email" id="user-email"></span>
+        <button class="credit-badge" id="credit-badge" onclick="openSettings()" title="View billing">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" aria-hidden="true"><circle cx="5" cy="5" r="4.5" fill="none" stroke="currentColor" stroke-width="1"/><text x="5" y="7.5" text-anchor="middle" font-size="6" font-family="monospace">$</text></svg>
+          <span id="credit-badge-text">$5.00 left</span>
+        </button>
+        <button class="icon-btn" id="theme-toggle" aria-label="Toggle theme">☀</button>
+        <button class="btn-signout" onclick="signOut()">Sign Out</button>
+      </div>
+    </header>
+
+    <div class="scroll-area">
+      <div class="content">
+
+        <!-- Hero -->
+        <div class="hero" id="hero">
+          <div class="hero-eyebrow">AI-Powered Phone Agent</div>
+          <div class="hero-title">CHATTER<span class="accent">AI</span></div>
+          <div class="hero-subtitle">Tell it what you need done. It makes the call.</div>
+        </div>
+
+        <!-- Agent selector -->
+        <div class="agent-section">
+          <div class="section-label">Agent</div>
+          <div class="agent-grid" id="agent-grid">
+            <button class="agent-btn selected" data-agent="auto">
+              <span class="agent-icon">✨</span>
+              <span class="agent-label">Auto-detect</span>
+            </button>
+            <button class="agent-btn" data-agent="food_ordering">
+              <span class="agent-icon">🍔</span>
+              <span class="agent-label">Food Ordering</span>
+            </button>
+            <button class="agent-btn" data-agent="appointment_booking">
+              <span class="agent-icon">📅</span>
+              <span class="agent-label">Appointments</span>
+            </button>
+            <button class="agent-btn" data-agent="general_customer_service">
+              <span class="agent-icon">💬</span>
+              <span class="agent-label">Customer Service</span>
+            </button>
+            <button class="agent-btn" data-agent="insurance_calls">
+              <span class="agent-icon">🛡️</span>
+              <span class="agent-label">Insurance</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Input -->
+        <div class="input-section">
+          <div class="input-card">
+            <textarea
+              id="main-input"
+              placeholder='e.g. "Order a large taro boba for pickup at 5pm from the nearest boba shop in SF" or "Call +1-650-555-1234 and book a haircut for Saturday"'
+            ></textarea>
+            <div class="input-footer">
+              <span class="input-hint">↵ send · Shift+↵ newline</span>
+              <span id="submit-error"></span>
+              <button class="btn-submit" id="submit-btn" type="button">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M2 6h8M6 2l4 4-4 4"/>
+                </svg>
+                Execute
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Example chips -->
+        <div class="chips-section" id="chips-section">
+          <div class="chips-wrap" id="chips-wrap"></div>
+        </div>
+
+        <!-- Tasks -->
+        <div class="tasks-section" id="tasks-section" style="display:none">
+          <div class="tasks-header">
+            <div class="section-label" style="margin:0">Recent Calls</div>
+            <div class="section-label" style="margin:0" id="calls-count"></div>
+          </div>
+          <div id="task-list"></div>
+        </div>
+
       </div>
     </div>
-    <div class="chips-label">Try an example</div>
-    <div class="chips-wrap" id="chips-wrap"></div>
   </div>
 
-  <!-- Compact input (has-tasks) -->
-  <div class="compact-wrap">
-    <textarea
-      id="request-input"
-      rows="3"
-      placeholder='e.g. "Order boba from nearest shop in SF" or "Call +1-650-555-1234 and book a haircut"'
-    ></textarea>
-    <div class="dispatch-footer">
-      <div id="submit-error"></div>
-      <button id="submit-btn" type="button">EXECUTE →</button>
+  <!-- Settings panel -->
+  <div class="settings-overlay" id="settings-overlay">
+    <div class="settings-backdrop" onclick="closeSettings()"></div>
+    <div class="settings-panel">
+      <div class="settings-head">
+        <span class="settings-title">Settings</span>
+        <button class="settings-close" onclick="closeSettings()">✕</button>
+      </div>
+      <div class="settings-body">
+
+        <!-- Profile -->
+        <div>
+          <div class="settings-section-title">Profile</div>
+          <div class="profile-card">
+            <div class="profile-avatar" id="settings-avatar">?</div>
+            <div class="profile-info">
+              <div class="profile-name" id="settings-name">—</div>
+              <div class="profile-email" id="settings-email">—</div>
+            </div>
+            <span class="profile-badge">Private Beta</span>
+          </div>
+        </div>
+
+        <!-- Billing -->
+        <div>
+          <div class="settings-section-title">Billing &amp; Credits</div>
+          <div class="billing-card">
+            <div class="billing-balance">
+              <div class="balance-label">Remaining Balance</div>
+              <div class="balance-amount" id="settings-balance">
+                <span id="settings-balance-text">$5</span><span class="cents">.00</span>
+              </div>
+              <div class="balance-sub" id="settings-balance-sub">5 calls remaining · resets never (beta)</div>
+              <div class="balance-bar-wrap">
+                <div class="balance-bar">
+                  <div class="balance-bar-fill" id="settings-bar" style="width:100%"></div>
+                </div>
+                <div class="balance-bar-labels">
+                  <span>$0</span>
+                  <span>$5 included free</span>
+                </div>
+              </div>
+            </div>
+            <div class="billing-pricing">
+              <div class="pricing-row">
+                <span class="pricing-label">📞 Outbound AI call</span>
+                <span class="pricing-value">$1.00 / call</span>
+              </div>
+              <div class="pricing-row">
+                <span class="pricing-label">🎁 Welcome credits</span>
+                <span class="pricing-value">$5.00 free</span>
+              </div>
+              <div class="pricing-row">
+                <span class="pricing-label">💳 Next tier</span>
+                <span class="pricing-value">Coming soon</span>
+              </div>
+            </div>
+            <div class="billing-cta">
+              <button class="btn-add-credits" onclick="openAddCredits()">
+                + Add Credits
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Usage history -->
+        <div>
+          <div class="settings-section-title">Usage History</div>
+          <div class="usage-list" id="usage-list">
+            <div class="usage-empty">No calls charged yet</div>
+          </div>
+        </div>
+
+      </div>
     </div>
   </div>
 
-  <!-- Calls Section -->
-  <div class="calls-section">
-    <div class="calls-label">
-      CALLS
-      <span class="calls-label-line"></span>
-      <span id="calls-count">0 TOTAL</span>
+  <!-- Add Credits modal -->
+  <div class="modal-overlay" id="credits-modal">
+    <div class="modal">
+      <div class="modal-head">
+        <span class="modal-title">Add Credits</span>
+        <button class="modal-close" onclick="closeAddCredits()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="credit-options" id="credit-options">
+          <div class="credit-option selected" data-amount="5">
+            <div class="credit-option-amount">$5</div>
+            <div class="credit-option-calls">5 calls</div>
+          </div>
+          <div class="credit-option" data-amount="10">
+            <div class="credit-option-amount">$10</div>
+            <div class="credit-option-calls">10 calls</div>
+          </div>
+          <div class="credit-option" data-amount="25">
+            <div class="credit-option-amount">$25</div>
+            <div class="credit-option-calls">25 calls</div>
+          </div>
+        </div>
+        <div class="modal-input-group">
+          <label class="modal-label">Card Number</label>
+          <input class="modal-input" type="text" placeholder="4242 4242 4242 4242" maxlength="19" id="card-number">
+        </div>
+        <div class="modal-card-row">
+          <div class="modal-input-group">
+            <label class="modal-label">Expiry</label>
+            <input class="modal-input" type="text" placeholder="MM / YY" maxlength="7" id="card-expiry">
+          </div>
+          <div class="modal-input-group">
+            <label class="modal-label">CVC</label>
+            <input class="modal-input" type="text" placeholder="123" maxlength="3" id="card-cvc">
+          </div>
+        </div>
+        <div class="modal-note">🔒 Payments are securely processed — this is a demo, no real charge will occur.</div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn-pay" id="btn-pay" onclick="processPayment()">Pay & Add Credits</button>
+      </div>
     </div>
-    <div id="task-list"></div>
   </div>
 
   <script>
-    // ── State ─────────────────────────────────────────────────────────────────
+    // ── Auth guard ──────────────────────────────────────────────────────────────
+    // SUPABASE SWAP: replace sessionStorage check with:
+    //   const { data: { session } } = await supabase.auth.getSession()
+    //   if (!session) window.location.href = '/login.html'
+    ;(function authGuard() {
+      if (!sessionStorage.getItem('chatter_authed')) {
+        window.location.href = '/login.html';
+      }
+      const email = sessionStorage.getItem('chatter_user_email') || '';
+      if (email) document.getElementById('user-email').textContent = email;
+    })();
+
+    function signOut() {
+      // SUPABASE SWAP: await supabase.auth.signOut()
+      sessionStorage.clear();
+      window.location.href = '/login.html';
+    }
+
+    // ── Theme ───────────────────────────────────────────────────────────────────
+    const themeToggle = document.getElementById('theme-toggle');
+    if (localStorage.getItem('chatter_theme') === 'dark') {
+      document.documentElement.classList.add('dark');
+      themeToggle.textContent = '☽';
+    }
+    themeToggle.addEventListener('click', () => {
+      const dark = document.documentElement.classList.toggle('dark');
+      themeToggle.textContent = dark ? '☽' : '☀';
+      localStorage.setItem('chatter_theme', dark ? 'dark' : 'light');
+    });
+
+    // ── Sidebar toggle ──────────────────────────────────────────────────────────
+    document.getElementById('sidebar-toggle').addEventListener('click', () => {
+      document.getElementById('sidebar').classList.toggle('collapsed');
+    });
+
+    // ── Agent selector ──────────────────────────────────────────────────────────
+    let selectedAgent = 'auto';
+
+    document.getElementById('agent-grid').addEventListener('click', e => {
+      const btn = e.target.closest('.agent-btn');
+      if (!btn) return;
+      document.querySelectorAll('.agent-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      selectedAgent = btn.dataset.agent;
+    });
+
+    // ── State ───────────────────────────────────────────────────────────────────
     const state = {
-      tasks:      [],
-      expanded:   new Set(),
-      details:    {},
-      callStart:  {},
+      tasks:     [],
+      expanded:  new Set(),
+      details:   {},
+      callStart: {},
     };
 
-    // ── Example chips ─────────────────────────────────────────────────────────
+    // ── Example chips ───────────────────────────────────────────────────────────
     const EXAMPLE_CHIPS = [
-      { label: 'Order boba pickup',     template: 'Order a large taro boba for pickup at 5pm from the nearest boba shop in SF' },
-      { label: 'Book a vet visit',      template: 'Find a vet near downtown Seattle and book an appointment for my dog next week' },
-      { label: 'Schedule a haircut',    template: 'Call +1-XXX-XXX-XXXX and book a haircut for Saturday at noon' },
-      { label: 'Negotiate insurance',   template: 'Call +1-XXX-XXX-XXXX and ask about lowering my monthly insurance rate' },
-      { label: 'Get medical records',   template: 'Call +1-XXX-XXX-XXXX and request a copy of my medical records' },
-      { label: 'Book a restaurant',     template: 'Find a good Italian restaurant in SoHo and make a reservation for 2 at 7pm tonight' },
+      { label: 'Order boba pickup',   template: 'Order a large taro boba for pickup at 5pm from the nearest boba shop in SF' },
+      { label: 'Book a vet visit',    template: 'Find a vet near downtown Seattle and book an appointment for my dog next week' },
+      { label: 'Schedule a haircut',  template: 'Call +1-XXX-XXX-XXXX and book a haircut for Saturday at noon' },
+      { label: 'Dispute insurance',   template: 'Call +1-XXX-XXX-XXXX and ask about lowering my monthly insurance rate' },
+      { label: 'Get medical records', template: 'Call +1-XXX-XXX-XXXX and request a copy of my medical records' },
+      { label: 'Book a restaurant',   template: 'Find a good Italian restaurant in SoHo and make a reservation for 2 at 7pm tonight' },
     ];
 
     function renderChips() {
@@ -745,32 +1848,26 @@
         const btn = e.target.closest('.example-chip');
         if (!btn) return;
         const chip = EXAMPLE_CHIPS[+btn.dataset.idx];
-        // Fill hero input and select the XXX placeholder so user can type their number
-        heroInput.value = chip.template;
-        heroInput.focus();
+        mainInput.value = chip.template;
+        mainInput.focus();
+        autoGrow(mainInput);
         const phoneStart = chip.template.indexOf('+1-XXX');
         const phoneEnd   = chip.template.indexOf(' and');
-        if (phoneStart !== -1 && phoneEnd !== -1) {
-          heroInput.setSelectionRange(phoneStart, phoneEnd);
-        } else {
-          heroInput.setSelectionRange(0, chip.template.length);
-        }
+        if (phoneStart !== -1 && phoneEnd !== -1) mainInput.setSelectionRange(phoneStart, phoneEnd);
+        else mainInput.setSelectionRange(0, chip.template.length);
       });
     }
 
-    // ── DOM refs ──────────────────────────────────────────────────────────────
-    const heroInput    = document.getElementById('hero-input');
-    const heroSubmit   = document.getElementById('hero-submit-btn');
-    const heroError    = document.getElementById('hero-error');
-    const requestInput = document.getElementById('request-input');
-    const submitBtn    = document.getElementById('submit-btn');
-    const submitError  = document.getElementById('submit-error');
-    const taskList     = document.getElementById('task-list');
-    const healthDot    = document.getElementById('health-dot');
-    const healthLabel  = document.getElementById('health-label');
-    const callsCount   = document.getElementById('calls-count');
+    // ── DOM refs ────────────────────────────────────────────────────────────────
+    const mainInput   = document.getElementById('main-input');
+    const submitBtn   = document.getElementById('submit-btn');
+    const submitError = document.getElementById('submit-error');
+    const taskList    = document.getElementById('task-list');
+    const healthDot   = document.getElementById('health-dot');
+    const healthLabel = document.getElementById('health-label');
+    const callsCount  = document.getElementById('calls-count');
 
-    // ── Textarea auto-grow ────────────────────────────────────────────────────
+    // ── Textarea auto-grow ──────────────────────────────────────────────────────
     function autoGrow(el) {
       if (!CSS.supports('field-sizing', 'content')) {
         el.style.height = 'auto';
@@ -778,44 +1875,40 @@
       }
     }
 
-    heroInput.addEventListener('input', () => autoGrow(heroInput));
-    requestInput.addEventListener('input', () => autoGrow(requestInput));
-
-    heroInput.addEventListener('keydown', e => {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(heroInput, heroError, heroSubmit); }
+    mainInput.addEventListener('input', () => autoGrow(mainInput));
+    mainInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); }
     });
-    requestInput.addEventListener('keydown', e => {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(requestInput, submitError, submitBtn); }
-    });
+    submitBtn.addEventListener('click', () => handleSubmit());
 
-    heroSubmit.addEventListener('click', () => handleSubmit(heroInput, heroError, heroSubmit));
-    submitBtn.addEventListener('click', () => handleSubmit(requestInput, submitError, submitBtn));
-
-    // ── Submit ────────────────────────────────────────────────────────────────
-    async function handleSubmit(inputEl, errorEl, btnEl) {
-      const text = inputEl.value.trim();
+    // ── Submit ──────────────────────────────────────────────────────────────────
+    async function handleSubmit() {
+      const text = mainInput.value.trim();
       if (!text) return;
 
-      errorEl.textContent = '';
-      const origText = btnEl.textContent;
-      btnEl.textContent = 'DISPATCHING...';
-      btnEl.disabled = true;
+      submitError.textContent = '';
+      const origHTML = submitBtn.innerHTML;
+      submitBtn.innerHTML = 'Sending…';
+      submitBtn.disabled = true;
 
       try {
+        const body = { request: text };
+        if (selectedAgent !== 'auto') body.agent_type = selectedAgent;
+
         const res  = await fetch('/tasks', {
-          method: 'POST',
+          method:  'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ request: text }),
+          body:    JSON.stringify(body),
         });
         const data = await res.json().catch(() => ({}));
 
         if (!res.ok) {
-          errorEl.textContent = data?.error || data?.message || `Error ${res.status}`;
+          submitError.textContent = data?.error || data?.message || `Error ${res.status}`;
           return;
         }
 
-        inputEl.value = '';
-        if (!CSS.supports('field-sizing', 'content')) inputEl.style.height = 'auto';
+        mainInput.value = '';
+        if (!CSS.supports('field-sizing', 'content')) mainInput.style.height = 'auto';
 
         state.tasks = [data, ...state.tasks.filter(t => t.id !== data.id)];
         state.expanded.add(data.id);
@@ -823,28 +1916,31 @@
         await refreshTasks();
 
       } catch {
-        errorEl.textContent = 'Could not connect to server.';
+        submitError.textContent = 'Could not connect to server.';
       } finally {
-        btnEl.textContent = origText;
-        btnEl.disabled = false;
+        submitBtn.innerHTML = origHTML;
+        submitBtn.disabled = false;
       }
     }
 
-    // ── Health ────────────────────────────────────────────────────────────────
+    // ── Health ──────────────────────────────────────────────────────────────────
     async function checkHealth() {
       try {
         const res  = await fetch('/api/health');
         const data = await res.json();
         healthDot.classList.remove('err');
         const n = data.activeCalls ?? 0;
-        healthLabel.textContent = `${n} ACTIVE`;
+        healthLabel.textContent = `${n} active`;
+        if (n > 0) healthDot.classList.add('calling');
+        else healthDot.classList.remove('calling');
       } catch {
         healthDot.classList.add('err');
-        healthLabel.textContent = 'OFFLINE';
+        healthDot.classList.remove('calling');
+        healthLabel.textContent = 'offline';
       }
     }
 
-    // ── Refresh loop ──────────────────────────────────────────────────────────
+    // ── Refresh loop ────────────────────────────────────────────────────────────
     async function refreshTasks() {
       try {
         const res = await fetch('/tasks');
@@ -870,63 +1966,67 @@
       } catch { /* silent */ }
     }
 
-    // ── Render ────────────────────────────────────────────────────────────────
+    // ── Render ──────────────────────────────────────────────────────────────────
     function renderTasks(animateFirst) {
       const tasks = state.tasks;
+      const hero         = document.getElementById('hero');
+      const tasksSection = document.getElementById('tasks-section');
+      const chipsSection = document.getElementById('chips-section');
 
-      // Toggle hero ↔ compact layout
-      document.body.className = tasks.length === 0 ? 'no-tasks' : 'has-tasks';
-
-      callsCount.textContent = `${tasks.length} TOTAL`;
-
-      if (tasks.length === 0) {
-        taskList.innerHTML = '';
-        return;
+      if (tasks.length > 0) {
+        tasksSection.style.display = '';
+        chipsSection.style.display = 'none';
+        hero.classList.add('compact');
+      } else {
+        tasksSection.style.display = 'none';
+        chipsSection.style.display = '';
+        hero.classList.remove('compact');
       }
 
+      callsCount.textContent = tasks.length ? `${tasks.length} total` : '';
+      chargeForCallingTasks(tasks);
+
+      if (tasks.length === 0) { taskList.innerHTML = ''; updateSidebar(); return; }
+
       const existing = {};
-      taskList.querySelectorAll('.task-row[data-id]').forEach(el => {
+      taskList.querySelectorAll('.task-card[data-id]').forEach(el => {
         existing[el.dataset.id] = el;
       });
 
       const ids = tasks.map(t => String(t.id));
-      Object.keys(existing).forEach(id => {
-        if (!ids.includes(id)) existing[id].remove();
-      });
+      Object.keys(existing).forEach(id => { if (!ids.includes(id)) existing[id].remove(); });
 
       tasks.forEach((task, idx) => {
         const id = String(task.id);
         if (existing[id]) {
-          updateRow(existing[id], task);
+          updateCard(existing[id], task);
         } else {
-          const el = createRow(task);
+          const el = createCard(task);
           if (animateFirst && idx === 0) {
             el.style.opacity = '0';
-            requestAnimationFrame(() => {
-              el.style.transition = 'opacity 0.25s';
-              el.style.opacity = '1';
-            });
+            requestAnimationFrame(() => { el.style.transition = 'opacity 0.22s'; el.style.opacity = '1'; });
           }
           const ref = taskList.children[idx];
           if (ref) taskList.insertBefore(el, ref);
           else taskList.appendChild(el);
         }
       });
+
+      updateSidebar();
     }
 
-    function createRow(task) {
+    function createCard(task) {
       const el = document.createElement('div');
-      el.className = `task-row s-${task.status}`;
+      el.className  = `task-card s-${task.status}`;
       el.dataset.id = String(task.id);
-      el.innerHTML = rowHTML(task);
-      attachRowEvents(el, task);
+      el.innerHTML  = cardHTML(task);
+      attachCardEvents(el, task);
       return el;
     }
 
-    function updateRow(el, task) {
+    function updateCard(el, task) {
       const id = String(task.id);
 
-      // Auto-expand when call starts
       if (task.status === 'calling' && !state.expanded.has(id)) {
         state.expanded.add(id);
         const wrap = el.querySelector('.transcript-wrap');
@@ -937,139 +2037,111 @@
             .then(data => {
               if (!data) return;
               state.details[id] = { transcripts: data.transcripts || [], result: data.result || null };
-              const linesEl = el.querySelector('.transcript-lines');
-              if (linesEl) { renderTranscriptLines(linesEl, task, id); linesEl.scrollTop = linesEl.scrollHeight; }
+              const msgs = el.querySelector('.chat-messages');
+              if (msgs) { renderChatBubbles(msgs, task, id); msgs.scrollTop = msgs.scrollHeight; }
             }).catch(() => {});
         }
       }
 
-      // Track call start time for progress bar
-      if (task.status === 'calling' && !state.callStart[id]) {
-        state.callStart[id] = Date.now();
+      if (task.status === 'calling' && !state.callStart[id]) state.callStart[id] = Date.now();
+
+      el.className = `task-card s-${task.status}`;
+
+      // Status pill colours
+      const dot = el.querySelector('.status-dot');
+      const lbl = el.querySelector('.status-label');
+      if (dot) {
+        dot.className = `status-dot dot-${task.status}`;
+      }
+      if (lbl) {
+        lbl.className = `status-label lbl-${task.status}`;
+        lbl.textContent = task.status;
       }
 
-      // Status class on the row (drives all CSS descendants)
-      el.className = `task-row s-${task.status}`;
-      const statusEl = el.querySelector('.task-status');
-      if (statusEl) {
-        const lbl = statusEl.querySelector('.status-label');
-        if (lbl) lbl.textContent = task.status.toUpperCase();
+      const reqEl = el.querySelector('.task-request');
+      if (reqEl) reqEl.textContent = task.description || task.request || '';
+
+      const subEl = el.querySelector('.task-sub');
+      if (subEl) {
+        const phone = extractPhone(task);
+        subEl.textContent = phone || task.business_name || '';
       }
 
-      // Phone
-      const phoneEl = el.querySelector('.task-phone');
-      if (phoneEl) phoneEl.textContent = extractPhone(task) || '—';
-
-      // Description
-      const descEl = el.querySelector('.task-desc');
-      if (descEl) descEl.textContent = task.description || task.request || '';
-
-      // Inline result
-      const irEl  = el.querySelector('.task-inline-result');
-      const det   = state.details[id];
-      const result = det?.result || task.result || null;
-      if (irEl) {
-        if (result && (task.status === 'completed' || task.status === 'failed')) {
-          irEl.textContent = (task.status === 'completed' ? '✓ ' : '✗ ') + truncate(result, 40);
-        } else {
-          irEl.textContent = '';
-        }
-      }
-
-      // Time
       const timeEl = el.querySelector('.task-time');
       if (timeEl) timeEl.textContent = formatTime(task);
 
-      // Cancel button visibility
       const cancelBtn = el.querySelector('.task-cancel');
       if (cancelBtn) cancelBtn.style.display = task.status === 'pending' ? '' : 'none';
 
-      // Progress bar
       const progressFill = el.querySelector('.task-progress-fill');
-      if (progressFill) {
-        if (task.status === 'calling' && state.callStart[id]) {
-          const elapsed = Date.now() - state.callStart[id];
-          const pct = Math.min(elapsed / 180000, 0.94) * 100;
-          progressFill.style.width = pct + '%';
-        } else if (task.status === 'completed' || task.status === 'failed') {
-          progressFill.style.width = '100%';
-        }
+      if (progressFill && task.status === 'calling' && state.callStart[id]) {
+        const pct = Math.min((Date.now() - state.callStart[id]) / 180000, 0.94) * 100;
+        progressFill.style.width = pct + '%';
       }
 
-      // Mark Complete button visibility
       const mcWrap = el.querySelector('.mark-complete-wrap');
       if (mcWrap) mcWrap.style.display = task.status === 'calling' ? '' : 'none';
 
-      // Transcript content
       const tBody = el.querySelector('.transcript-body');
       if (tBody) {
-        const linesEl = tBody.querySelector('.transcript-lines');
-        if (linesEl) renderTranscriptLines(linesEl, task, id);
-        const lineCount = tBody.querySelector('.transcript-line-count');
-        if (lineCount) {
-          const n = (state.details[id]?.transcripts || []).length;
-          lineCount.textContent = n ? `${n} LINE${n !== 1 ? 'S' : ''}` : '';
-        }
+        const msgs = tBody.querySelector('.chat-messages');
+        if (msgs) renderChatBubbles(msgs, task, id);
+
+        const det    = state.details[id];
+        const result = det?.result || task.result || null;
         let resFooter = tBody.querySelector('.transcript-result');
         if (result && task.status !== 'calling') {
           if (!resFooter) {
             resFooter = document.createElement('div');
-            resFooter.className = 'transcript-result';
+            resFooter.className = 'transcript-result' + (task.status === 'failed' ? ' failed' : '');
             tBody.appendChild(resFooter);
           }
-          resFooter.textContent = (task.status === 'completed' ? '✓ RESULT: ' : '✗ RESULT: ') + result;
+          resFooter.textContent = (task.status === 'completed' ? '✓ ' : '✗ ') + result;
         } else if (resFooter) {
           resFooter.remove();
         }
       }
 
-      // Expand state
       const wrap = el.querySelector('.transcript-wrap');
       if (wrap) wrap.classList.toggle('open', state.expanded.has(id));
 
-      // Auto-scroll for calling tasks
       if (task.status === 'calling' && state.expanded.has(id)) {
-        const linesEl = el.querySelector('.transcript-lines');
-        if (linesEl) linesEl.scrollTop = linesEl.scrollHeight;
+        const msgs = el.querySelector('.chat-messages');
+        if (msgs) msgs.scrollTop = msgs.scrollHeight;
       }
     }
 
     const AGENT_LABELS = {
-      food_ordering:             'FOOD',
-      appointment_booking:       'APPT',
-      general_customer_service:  'SUPPORT',
-      insurance_calls:           'INSURANCE',
+      food_ordering:             'Food',
+      appointment_booking:       'Appt',
+      general_customer_service:  'Support',
+      insurance_calls:           'Insurance',
     };
 
-    function agentBadgeHTML(task) {
+    function agentChipHTML(task) {
       const type = task.agent_type;
       if (!type || type === 'generic') return '';
-      const label = AGENT_LABELS[type] || type.toUpperCase().replace(/_/g, ' ');
-      return `<span class="agent-badge agent-${escHtml(type)}">${escHtml(label)}</span>`;
+      const label = AGENT_LABELS[type] || type.replace(/_/g, ' ');
+      return `<span class="agent-chip ${escHtml(type)}">${escHtml(label)}</span>`;
     }
 
-    function rowHTML(task) {
-      const id     = String(task.id);
-      const phone  = escHtml(extractPhone(task) || task.business_name || '—');
-      const desc   = escHtml(task.description || task.request || '');
-      const det    = state.details[id];
-      const result = det?.result || task.result || null;
-      const inlineResult = result && (task.status === 'completed' || task.status === 'failed')
-        ? `<span class="task-inline-result">${task.status === 'completed' ? '✓ ' : '✗ '}${escHtml(truncate(result, 40))}</span>`
-        : `<span class="task-inline-result"></span>`;
+    function cardHTML(task) {
+      const id    = String(task.id);
+      const req   = escHtml(task.description || task.request || '');
+      const phone = extractPhone(task);
+      const sub   = escHtml(phone || task.business_name || '');
 
       return `
-        <div class="task-main">
-          <div class="task-status">
-            <div class="status-dot"></div>
-            <span class="status-label">${task.status.toUpperCase()}</span>
+        <div class="task-card-header">
+          <div class="task-status-pill">
+            <div class="status-dot dot-${task.status}"></div>
+            <span class="status-label lbl-${task.status}">${task.status}</span>
           </div>
-          <div class="task-info">
-            <span class="task-phone">${phone}</span>
-            <span class="task-desc">${desc}</span>
-            ${agentBadgeHTML(task)}
+          <div class="task-info-text">
+            <div class="task-request">${req}</div>
+            ${sub ? `<div class="task-sub">${sub}</div>` : ''}
           </div>
-          ${inlineResult}
+          ${agentChipHTML(task)}
           <span class="task-time">${escHtml(formatTime(task))}</span>
           <button class="task-cancel" title="Cancel" data-action="cancel" style="${task.status !== 'pending' ? 'display:none' : ''}">×</button>
         </div>
@@ -1079,11 +2151,7 @@
         <div class="transcript-wrap${state.expanded.has(id) ? ' open' : ''}">
           <div class="transcript-inner">
             <div class="transcript-body">
-              <div class="transcript-header">
-                <span class="transcript-header-label">LIVE TRANSCRIPT</span>
-                <span class="transcript-line-count"></span>
-              </div>
-              <div class="transcript-lines"></div>
+              <div class="chat-messages"></div>
               <div class="mark-complete-wrap" style="${task.status !== 'calling' ? 'display:none' : ''}">
                 <button class="mark-complete-btn" data-action="mark-complete">Mark Complete</button>
                 <div class="mark-complete-input-wrap">
@@ -1097,7 +2165,7 @@
       `;
     }
 
-    function renderTranscriptLines(container, task, resolvedId) {
+    function renderChatBubbles(container, task, resolvedId) {
       const id          = resolvedId || String(task.id);
       const transcripts = state.details[id]?.transcripts || [];
       const currentTask = state.tasks.find(t => String(t.id) === id) || task;
@@ -1111,19 +2179,18 @@
       }
 
       container.innerHTML = transcripts.map((t, i) => {
-        const role      = (t.role || '').toLowerCase();
-        const isAgent   = role === 'agent' || role === 'assistant';
-        const roleLabel = isAgent ? 'AGENT' : 'USER';
-        const isLast    = i === transcripts.length - 1;
+        const role       = (t.role || '').toLowerCase();
+        const isAgent    = role === 'agent' || role === 'assistant';
+        const isLast     = i === transcripts.length - 1;
         const showCursor = isLast && isAgent && calling;
-        return `<div class="transcript-line">
-          <span class="tl-role${isAgent ? ' agent' : ''}">${roleLabel}</span>
-          <span class="tl-content">${escHtml(t.content || '')}${showCursor ? '<span class="transcript-cursor">▌</span>' : ''}</span>
+        return `<div class="chat-message ${isAgent ? 'agent' : 'user'}">
+          <div class="chat-avatar">${isAgent ? 'AI' : 'ME'}</div>
+          <div class="chat-bubble">${escHtml(t.content || '')}${showCursor ? '<span class="transcript-cursor">▌</span>' : ''}</div>
         </div>`;
       }).join('');
     }
 
-    function attachRowEvents(el, task) {
+    function attachCardEvents(el, task) {
       const id = String(task.id);
 
       el.addEventListener('click', e => {
@@ -1131,14 +2198,12 @@
         toggleExpand(id, el, task);
       });
 
-      // Cancel
       el.addEventListener('click', e => {
         if (!e.target.closest('[data-action="cancel"]')) return;
         e.stopPropagation();
         cancelTask(id);
       });
 
-      // Mark complete — show input
       el.addEventListener('click', e => {
         const btn = e.target.closest('[data-action="mark-complete"]');
         if (!btn) return;
@@ -1150,31 +2215,29 @@
         inputWrap.querySelector('.mark-complete-input').focus();
       });
 
-      // Confirm complete
       el.addEventListener('click', async e => {
         const btn = e.target.closest('[data-action="confirm-complete"]');
         if (!btn) return;
         e.stopPropagation();
         const inputWrap = btn.closest('.mark-complete-input-wrap');
         const result = inputWrap.querySelector('.mark-complete-input').value.trim() || 'Task completed manually';
-        btn.textContent = '...';
+        btn.textContent = '…';
         btn.disabled = true;
         try {
           const res = await fetch(`/tasks/${id}`, {
-            method: 'PATCH',
+            method:  'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: 'completed', result }),
+            body:    JSON.stringify({ status: 'completed', result }),
           });
           if (!res.ok) throw new Error(`Server error ${res.status}`);
           await refreshTasks();
-        } catch { /* silent — button re-enables */ } finally {
+        } catch { /* silent */ } finally {
           btn.textContent = 'Confirm';
           btn.disabled = false;
         }
       });
     }
 
-    // ── Expand / collapse ─────────────────────────────────────────────────────
     function toggleExpand(id, el, task) {
       if (state.expanded.has(id)) {
         state.expanded.delete(id);
@@ -1185,36 +2248,19 @@
             .then(r => r.ok ? r.json() : null)
             .then(data => {
               if (!data) return;
-              state.details[id] = {
-                transcripts: data.transcripts || [],
-                result:      data.result || task.result || null,
-              };
-              const linesEl = el.querySelector('.transcript-lines');
-              if (linesEl) {
-                renderTranscriptLines(linesEl, task, id);
-                linesEl.scrollTop = linesEl.scrollHeight;
-              }
-              const lc = el.querySelector('.transcript-line-count');
-              if (lc) {
-                const n = state.details[id].transcripts.length;
-                lc.textContent = n ? `${n} LINE${n !== 1 ? 'S' : ''}` : '';
-              }
-            })
-            .catch(() => {});
+              state.details[id] = { transcripts: data.transcripts || [], result: data.result || task.result || null };
+              const msgs = el.querySelector('.chat-messages');
+              if (msgs) { renderChatBubbles(msgs, task, id); msgs.scrollTop = msgs.scrollHeight; }
+            }).catch(() => {});
         } else {
-          const linesEl = el.querySelector('.transcript-lines');
-          if (linesEl) {
-            renderTranscriptLines(linesEl, task, id);
-            linesEl.scrollTop = linesEl.scrollHeight;
-          }
+          const msgs = el.querySelector('.chat-messages');
+          if (msgs) { renderChatBubbles(msgs, task, id); msgs.scrollTop = msgs.scrollHeight; }
         }
       }
-
       const wrap = el.querySelector('.transcript-wrap');
       if (wrap) wrap.classList.toggle('open', state.expanded.has(id));
     }
 
-    // ── Cancel ────────────────────────────────────────────────────────────────
     async function cancelTask(id) {
       try {
         await fetch(`/tasks/${id}`, { method: 'DELETE' });
@@ -1222,7 +2268,51 @@
       } catch { /* silent */ }
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // ── Sidebar ─────────────────────────────────────────────────────────────────
+    function updateSidebar() {
+      const list  = document.getElementById('sidebar-list');
+      const tasks = state.tasks;
+
+      if (!tasks.length) {
+        list.innerHTML = '<div class="sidebar-empty">No calls yet</div>';
+        return;
+      }
+
+      list.innerHTML = tasks.map(task => {
+        const id     = String(task.id);
+        const det    = state.details[id];
+        const result = det?.result || task.result || null;
+        const query  = task.description || task.request || '';
+        const active = state.expanded.has(id);
+
+        return `<div class="sidebar-item${active ? ' active' : ''}" data-id="${id}">
+          <div class="sidebar-dot dot-${task.status}"></div>
+          <div class="sidebar-content">
+            <div class="sidebar-query">${escHtml(truncate(query, 80))}</div>
+            <div class="sidebar-meta">
+              <span class="sidebar-status lbl-${task.status}">${task.status}</span>
+              <span class="sidebar-time">${escHtml(formatTime(task))}</span>
+            </div>
+            ${result ? `<div class="sidebar-summary">${escHtml(truncate(result, 60))}</div>` : ''}
+          </div>
+        </div>`;
+      }).join('');
+
+      list.querySelectorAll('.sidebar-item').forEach(item => {
+        item.addEventListener('click', () => {
+          const id     = item.dataset.id;
+          const cardEl = taskList.querySelector(`.task-card[data-id="${id}"]`);
+          if (!cardEl) return;
+          cardEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          if (!state.expanded.has(id)) {
+            const t = state.tasks.find(x => String(x.id) === id);
+            if (t) toggleExpand(id, cardEl, t);
+          }
+        });
+      });
+    }
+
+    // ── Helpers ─────────────────────────────────────────────────────────────────
     function extractPhone(task) {
       if (task.phone_number) return task.phone_number;
       if (task.request) {
@@ -1235,10 +2325,7 @@
     function formatTime(task) {
       if (task.status === 'pending' && task.scheduled_at) {
         const msUntil = new Date(task.scheduled_at).getTime() - Date.now();
-        if (msUntil > 0) {
-          const mins = Math.ceil(msUntil / 60000);
-          return `in ${mins}m`;
-        }
+        if (msUntil > 0) return `in ${Math.ceil(msUntil / 60000)}m`;
       }
       const ts = task.created_at || task.updated_at;
       if (!ts) return '';
@@ -1264,9 +2351,186 @@
         .replace(/"/g, '&quot;');
     }
 
-    // ── Boot ──────────────────────────────────────────────────────────────────
+    // ── Credits ─────────────────────────────────────────────────────────────────
+    const CREDIT_MAX  = 5.00;
+    const CREDIT_KEY  = 'chatter_credits';
+    const CHARGED_KEY = 'chatter_charged_tasks';
+    const USAGE_KEY   = 'chatter_usage_log';
+
+    function getCredits() {
+      const v = parseFloat(localStorage.getItem(CREDIT_KEY));
+      return isNaN(v) ? CREDIT_MAX : Math.max(0, v);
+    }
+
+    function setCredits(v) {
+      localStorage.setItem(CREDIT_KEY, Math.max(0, parseFloat(v.toFixed(2))));
+      refreshCreditUI();
+    }
+
+    function addCredits(amount) {
+      setCredits(getCredits() + amount);
+    }
+
+    function getChargedIds() {
+      try { return new Set(JSON.parse(localStorage.getItem(CHARGED_KEY) || '[]')); }
+      catch { return new Set(); }
+    }
+
+    function markCharged(id, label) {
+      const ids = getChargedIds();
+      ids.add(String(id));
+      localStorage.setItem(CHARGED_KEY, JSON.stringify([...ids]));
+      // append to usage log
+      const log = getUsageLog();
+      log.unshift({ id: String(id), label: label || `Call #${id}`, cost: 1.00, ts: Date.now() });
+      localStorage.setItem(USAGE_KEY, JSON.stringify(log.slice(0, 50)));
+    }
+
+    function getUsageLog() {
+      try { return JSON.parse(localStorage.getItem(USAGE_KEY) || '[]'); }
+      catch { return []; }
+    }
+
+    function chargeForCallingTasks(tasks) {
+      const charged = getChargedIds();
+      tasks.forEach(t => {
+        if (t.status === 'calling' && !charged.has(String(t.id))) {
+          const credits = getCredits();
+          if (credits > 0) {
+            setCredits(credits - 1.00);
+            markCharged(t.id, truncate(t.description || t.request || `Call #${t.id}`, 50));
+          }
+        }
+      });
+    }
+
+    function refreshCreditUI() {
+      const credits = getCredits();
+      const pct     = Math.max(0, (credits / CREDIT_MAX) * 100);
+      const low     = credits <= 1;
+      const fmt     = `$${credits.toFixed(2)}`;
+
+      // Header badge
+      const badge = document.getElementById('credit-badge');
+      const badgeTxt = document.getElementById('credit-badge-text');
+      if (badge) badge.classList.toggle('low', low);
+      if (badgeTxt) badgeTxt.textContent = `${fmt} left`;
+
+      // Sidebar mini bar
+      const miniVal = document.getElementById('credit-mini-value');
+      const miniBar = document.getElementById('credit-mini-bar');
+      if (miniVal) { miniVal.textContent = fmt; miniVal.classList.toggle('low', low); }
+      if (miniBar) { miniBar.style.width = pct + '%'; miniBar.classList.toggle('low', low); }
+
+      // Settings panel
+      const balText = document.getElementById('settings-balance-text');
+      const balEl   = document.getElementById('settings-balance');
+      const balSub  = document.getElementById('settings-balance-sub');
+      const barFill = document.getElementById('settings-bar');
+      if (balText) balText.textContent = `$${Math.floor(credits)}`;
+      if (balEl)   balEl.classList.toggle('low', low);
+      if (barFill) { barFill.style.width = pct + '%'; barFill.classList.toggle('low', low); }
+      if (balSub) {
+        const calls = Math.floor(credits);
+        balSub.textContent = low
+          ? `⚠ Only ${calls} call${calls !== 1 ? 's' : ''} remaining — top up soon`
+          : `${calls} call${calls !== 1 ? 's' : ''} remaining · resets never (beta)`;
+      }
+
+      // Usage list
+      const ul = document.getElementById('usage-list');
+      if (ul) {
+        const log = getUsageLog();
+        if (!log.length) {
+          ul.innerHTML = '<div class="usage-empty">No calls charged yet</div>';
+        } else {
+          ul.innerHTML = log.map(entry => `
+            <div class="usage-row">
+              <div class="usage-dot"></div>
+              <div class="usage-text">${escHtml(entry.label)}</div>
+              <span class="usage-cost">−$${entry.cost.toFixed(2)}</span>
+              <span class="usage-time">${escHtml(formatTime({ created_at: new Date(entry.ts).toISOString() }))}</span>
+            </div>`).join('');
+        }
+      }
+    }
+
+    // ── Settings panel ──────────────────────────────────────────────────────────
+    function openSettings() {
+      const email = sessionStorage.getItem('chatter_user_email') || 'user@demo.dev';
+      const initials = email.slice(0, 2).toUpperCase();
+      document.getElementById('settings-avatar').textContent = initials;
+      document.getElementById('settings-name').textContent   = email.split('@')[0];
+      document.getElementById('settings-email').textContent  = email;
+      refreshCreditUI();
+      document.getElementById('settings-overlay').classList.add('open');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeSettings() {
+      document.getElementById('settings-overlay').classList.remove('open');
+      document.body.style.overflow = '';
+    }
+
+    // ── Add Credits modal ───────────────────────────────────────────────────────
+    let selectedCreditAmount = 5;
+
+    document.getElementById('credit-options').addEventListener('click', e => {
+      const opt = e.target.closest('.credit-option');
+      if (!opt) return;
+      document.querySelectorAll('.credit-option').forEach(o => o.classList.remove('selected'));
+      opt.classList.add('selected');
+      selectedCreditAmount = parseInt(opt.dataset.amount, 10);
+      document.getElementById('btn-pay').textContent = `Pay $${selectedCreditAmount} & Add Credits`;
+    });
+
+    // Format card number input
+    document.getElementById('card-number').addEventListener('input', e => {
+      let v = e.target.value.replace(/\D/g, '').slice(0, 16);
+      e.target.value = v.replace(/(.{4})/g, '$1 ').trim();
+    });
+
+    document.getElementById('card-expiry').addEventListener('input', e => {
+      let v = e.target.value.replace(/\D/g, '').slice(0, 4);
+      if (v.length >= 3) v = v.slice(0,2) + ' / ' + v.slice(2);
+      e.target.value = v;
+    });
+
+    function openAddCredits() {
+      document.getElementById('credits-modal').classList.add('open');
+    }
+
+    function closeAddCredits() {
+      document.getElementById('credits-modal').classList.remove('open');
+    }
+
+    function processPayment() {
+      const btn = document.getElementById('btn-pay');
+      const origText = btn.textContent;
+      btn.textContent = 'Processing…';
+      btn.disabled = true;
+      // Simulate a brief network delay then credit the account
+      setTimeout(() => {
+        addCredits(selectedCreditAmount);
+        btn.textContent = '✓ Credits Added!';
+        setTimeout(() => {
+          btn.textContent = origText;
+          btn.disabled = false;
+          closeAddCredits();
+          refreshCreditUI();
+        }, 1200);
+      }, 1400);
+    }
+
+    // Close modal on backdrop click
+    document.getElementById('credits-modal').addEventListener('click', e => {
+      if (e.target === document.getElementById('credits-modal')) closeAddCredits();
+    });
+
+    // ── Boot ────────────────────────────────────────────────────────────────────
     (async function init() {
       renderChips();
+      refreshCreditUI();
       await Promise.all([checkHealth(), refreshTasks()]);
       setInterval(refreshTasks, 2000);
       setInterval(checkHealth, 10000);
