@@ -1,94 +1,18 @@
 require('dotenv').config();
+const { createClient } = require('@supabase/supabase-js');
+const crypto = require('crypto');
 
-const Database = require('better-sqlite3');
-const path = require('path');
-const fs = require('fs');
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY,
+  { auth: { persistSession: false } }
+);
 
-const dataDir = path.join(process.cwd(), 'data');
-if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+function genId() {
+  return crypto.randomBytes(8).toString('hex');
+}
 
-const db = new Database(path.join(dataDir, 'tasks.db'));
-db.pragma('journal_mode = WAL');
-db.pragma('busy_timeout = 5000');
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS tasks (
-    id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(8)))),
-    description TEXT NOT NULL,
-    phone_number TEXT NOT NULL,
-    call_sid TEXT,
-    status TEXT DEFAULT 'pending',
-    result TEXT,
-    scheduled_at DATETIME,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS transcripts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    task_id TEXT NOT NULL REFERENCES tasks(id),
-    role TEXT NOT NULL,
-    content TEXT NOT NULL,
-    ts DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-`);
-
-db.exec(`
-  CREATE INDEX IF NOT EXISTS idx_tasks_call_sid ON tasks(call_sid);
-  CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
-`);
-
-// Additive migrations — safe to re-run (SQLite throws on duplicate column, we catch it)
-const migrate = (sql) => { try { db.exec(sql); } catch (_) { /* column already exists */ } };
-migrate('ALTER TABLE tasks ADD COLUMN agent_type TEXT DEFAULT "generic"');
-migrate('ALTER TABLE tasks ADD COLUMN agent_mode TEXT');
-migrate('ALTER TABLE tasks ADD COLUMN user_context TEXT');
-migrate('ALTER TABLE tasks ADD COLUMN business_name TEXT');
-migrate('ALTER TABLE tasks ADD COLUMN location_hint TEXT');
-
-const stmts = {
-  insertTask: db.prepare(`
-    INSERT INTO tasks (description, phone_number, scheduled_at, agent_type, agent_mode, user_context, business_name, location_hint)
-    VALUES (@description, @phone_number, @scheduled_at, @agent_type, @agent_mode, @user_context, @business_name, @location_hint)
-    RETURNING *
-  `),
-  updateCallSid: db.prepare(`
-    UPDATE tasks SET call_sid = ? WHERE id = ?
-  `),
-  updateTaskStatus: db.prepare(`
-    UPDATE tasks SET status = ?, result = COALESCE(?, result) WHERE id = ?
-  `),
-  getTask: db.prepare(`
-    SELECT * FROM tasks WHERE id = ?
-  `),
-  listTasks: db.prepare(`
-    SELECT * FROM tasks ORDER BY created_at DESC
-  `),
-  insertTranscript: db.prepare(`
-    INSERT INTO transcripts (task_id, role, content) VALUES (?, ?, ?)
-  `),
-  getTranscripts: db.prepare(`
-    SELECT * FROM transcripts WHERE task_id = ? ORDER BY ts ASC
-  `),
-  getPendingScheduled: db.prepare(`
-    SELECT * FROM tasks
-    WHERE status = 'pending'
-      AND scheduled_at IS NOT NULL
-      AND scheduled_at <= datetime('now')
-    ORDER BY scheduled_at ASC
-    LIMIT 10
-  `),
-  // Atomically claim a pending scheduled task — prevents double-fire across concurrent runs
-  claimScheduledTask: db.prepare(`
-    UPDATE tasks SET status = 'calling'
-    WHERE id = ? AND status = 'pending'
-  `),
-  countActive: db.prepare(`
-    SELECT COUNT(*) AS count FROM tasks WHERE status = 'calling'
-  `),
-  getTaskByCallSid: db.prepare(`SELECT * FROM tasks WHERE call_sid = ? LIMIT 1`),
-};
-
-function createTask({
+async function createTask({
   description,
   phone_number,
   scheduled_at = null,
@@ -97,60 +21,104 @@ function createTask({
   user_context = null,
   business_name = null,
   location_hint = null,
-}) {
-  return stmts.insertTask.get({
-    description, phone_number, scheduled_at,
-    agent_type, agent_mode, user_context, business_name, location_hint,
-  });
+}, userId) {
+  const id = genId();
+  const { data, error } = await supabase.from('tasks').insert({
+    id,
+    user_id: userId,
+    description,
+    phone_number,
+    scheduled_at,
+    agent_type,
+    agent_mode,
+    user_context,
+    business_name,
+    location_hint,
+  }).select().single();
+  if (error) throw error;
+  return data;
 }
 
-function updateCallSid(id, callSid) {
-  stmts.updateCallSid.run(callSid, id);
+async function updateCallSid(id, callSid) {
+  const { error } = await supabase.from('tasks').update({ call_sid: callSid }).eq('id', id);
+  if (error) throw error;
 }
 
-// result=undefined preserves the existing result value (COALESCE in SQL)
-// result=null explicitly clears it — pass undefined to preserve
-function updateTaskStatus(id, status, result = undefined) {
-  const r = stmts.updateTaskStatus.run(status, result !== undefined ? result : null, id);
-  if (r.changes === 0) {
-    // Task not found — not fatal but worth knowing
-  }
+async function updateTaskStatus(id, status, result = undefined) {
+  const update = { status };
+  if (result !== undefined) update.result = result;
+  const { error } = await supabase.from('tasks').update(update).eq('id', id);
+  if (error) throw error;
 }
 
-// Returns true if the task was successfully claimed (status was still 'pending')
-function claimTask(id) {
-  return stmts.claimScheduledTask.run(id).changes === 1;
+// Returns true if claim succeeded (status was still 'pending')
+async function claimTask(id) {
+  const { data, error } = await supabase.rpc('claim_scheduled_task', { task_id: id });
+  if (error) throw error;
+  return data === true;
 }
 
-function getTask(id) {
-  const task = stmts.getTask.get(id);
-  if (!task) return null;
-  task.transcripts = stmts.getTranscripts.all(id);
+async function getTask(id) {
+  const { data: task, error } = await supabase.from('tasks').select('*').eq('id', id).single();
+  if (error || !task) return null;
+  const { data: transcripts } = await supabase
+    .from('transcripts').select('*').eq('task_id', id).order('ts', { ascending: true });
+  task.transcripts = transcripts || [];
   return task;
 }
 
-function listTasks() {
-  return stmts.listTasks.all();
+async function listTasks(userId) {
+  const query = supabase.from('tasks').select('*').order('created_at', { ascending: false });
+  if (userId) query.eq('user_id', userId);
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
 }
 
-function addTranscript(taskId, role, content) {
-  stmts.insertTranscript.run(taskId, role, content);
+async function addTranscript(taskId, role, content) {
+  const { error } = await supabase.from('transcripts').insert({ task_id: taskId, role, content });
+  if (error) throw error;
 }
 
-function getTranscripts(taskId) {
-  return stmts.getTranscripts.all(taskId);
+async function getTranscripts(taskId) {
+  const { data, error } = await supabase
+    .from('transcripts').select('*').eq('task_id', taskId).order('ts', { ascending: true });
+  if (error) throw error;
+  return data || [];
 }
 
-function getPendingScheduled() {
-  return stmts.getPendingScheduled.all();
+async function getPendingScheduled() {
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('status', 'pending')
+    .not('scheduled_at', 'is', null)
+    .lte('scheduled_at', new Date().toISOString())
+    .order('scheduled_at', { ascending: true })
+    .limit(10);
+  if (error) throw error;
+  return data || [];
 }
 
-function countActive() {
-  return stmts.countActive.get().count;
+async function countActive() {
+  const { count, error } = await supabase
+    .from('tasks').select('*', { count: 'exact', head: true }).eq('status', 'calling');
+  if (error) throw error;
+  return count || 0;
 }
 
-function getTaskByCallSid(callSid) {
-  return stmts.getTaskByCallSid.get(callSid) || null;
+async function getTaskByCallSid(callSid) {
+  const { data, error } = await supabase
+    .from('tasks').select('*').eq('call_sid', callSid).limit(1).maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+// Fetch user's personal context from profiles table
+async function getUserContext(userId) {
+  const { data } = await supabase
+    .from('profiles').select('personal_context').eq('id', userId).single();
+  return data?.personal_context || {};
 }
 
 module.exports = {
@@ -165,4 +133,5 @@ module.exports = {
   getPendingScheduled,
   countActive,
   getTaskByCallSid,
+  getUserContext,
 };

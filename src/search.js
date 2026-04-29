@@ -12,17 +12,19 @@ const exa = new Exa(process.env.EXA_API_KEY);
  */
 async function findBusiness(description, location) {
   const locationPart = location ? ` near ${location}` : '';
-  const query = `${description}${locationPart} phone number`;
+  const query = `${description}${locationPart} phone number contact address`;
 
   logger.info({ query, description, location }, 'Searching for business phone number');
 
   let results;
   try {
     const res = await exa.searchAndContents(query, {
-      type: 'fast',
-      numResults: 5,
-      text: { maxCharacters: 2000 },
-      highlights: { numSentences: 5, highlightsPerUrl: 3 },
+      type: 'auto',
+      numResults: 7,
+      contents: {
+        text: { maxCharacters: 2000 },
+        highlights: { maxCharacters: 4000 },
+      },
     });
     results = res.results || [];
   } catch (err) {

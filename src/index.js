@@ -6,6 +6,9 @@ const REQUIRED_ENV = [
   'TWILIO_ACCOUNT_SID',
   'TWILIO_AUTH_TOKEN',
   'TWILIO_PHONE_NUMBER',
+  'SUPABASE_URL',
+  'SUPABASE_SERVICE_ROLE_KEY',
+  'SUPABASE_ANON_KEY',
 ];
 for (const key of REQUIRED_ENV) {
   if (!process.env[key]) {

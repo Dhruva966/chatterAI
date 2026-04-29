@@ -6,10 +6,17 @@ const logger = require('./logger');
 
 function startScheduler() {
   cron.schedule('* * * * *', async () => {
-    const tasks = db.getPendingScheduled();
+    let tasks;
+    try {
+      tasks = await db.getPendingScheduled();
+    } catch (err) {
+      logger.error({ err: err.message }, 'scheduler: failed to fetch pending tasks');
+      return;
+    }
+
     for (const task of tasks) {
-      // Atomically claim — skip if another process/tick already claimed it
-      if (!db.claimTask(task.id)) {
+      const claimed = await db.claimTask(task.id).catch(() => false);
+      if (!claimed) {
         logger.warn({ taskId: task.id }, 'scheduler: task already claimed, skipping');
         continue;
       }
@@ -18,7 +25,7 @@ function startScheduler() {
         await initiateCall({ taskId: task.id, phoneNumber: task.phone_number, webhookBase });
         logger.info({ taskId: task.id }, 'scheduler fired task');
       } catch (err) {
-        db.updateTaskStatus(task.id, 'failed', err.message);
+        await db.updateTaskStatus(task.id, 'failed', err.message);
         logger.error({ taskId: task.id, err: err.message }, 'scheduler failed to initiate call');
       }
     }

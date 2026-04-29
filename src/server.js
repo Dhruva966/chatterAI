@@ -2,6 +2,7 @@ require('dotenv').config();
 const http = require('http');
 const express = require('express');
 const expressWs = require('express-ws');
+const cors = require('cors');
 const path = require('path');
 const axios = require('axios');
 const db = require('./db');
@@ -11,11 +12,36 @@ const { initiateCall, hangUp } = require('./outbound');
 const { routeToAgent } = require('./agent-router');
 const { findBusiness } = require('./search');
 const logger = require('./logger');
+const { requireAuth } = require('./middleware/auth');
+const twilio = require('twilio');
+
+// Validates that incoming POST is genuinely from Twilio.
+// Skipped in development (no BASE_URL set) to allow ngrok testing.
+function requireTwilioSignature(req, res, next) {
+  const webhookBase = process.env.TWILIO_WEBHOOK_BASE || process.env.BASE_URL;
+  if (!webhookBase) return next(); // dev — skip
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const signature = req.headers['x-twilio-signature'] || '';
+  const url = `${webhookBase}${req.originalUrl}`;
+  if (!twilio.validateRequest(authToken, signature, url, req.body)) {
+    logger.warn({ url }, 'rejected request with invalid Twilio signature');
+    return res.status(403).send('Forbidden');
+  }
+  next();
+}
 
 const app = express();
 const server = http.createServer(app);
 expressWs(app, server);
 
+app.use(cors({
+  origin: [
+    'http://localhost:3001',
+    'http://localhost:3000',
+    process.env.FRONTEND_URL,
+  ].filter(Boolean),
+  credentials: true,
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(express.static(path.join(process.cwd(), 'public')));
@@ -24,10 +50,6 @@ app.use(express.static(path.join(process.cwd(), 'public')));
 // Helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Parse the webhook base URL and return the bare hostname (no scheme/trailing slash).
- * Falls back to req.headers.host if TWILIO_WEBHOOK_BASE is not set.
- */
 function getHost(req) {
   const base = process.env.TWILIO_WEBHOOK_BASE || process.env.BASE_URL;
   if (base) {
@@ -48,9 +70,6 @@ function xmlEscape(str) {
     .replace(/>/g, '&gt;');
 }
 
-/**
- * Call Gemini 2.5 Flash via the REST API and return parsed JSON from the model.
- */
 async function parseTaskWithGemini(request) {
   const today = new Date().toISOString().split('T')[0];
   const prompt = `Extract from this request:
@@ -65,16 +84,12 @@ Return valid JSON only, no explanation, no markdown.
 Input: "${request}"`;
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
-
   const response = await axios.post(url, {
     contents: [{ parts: [{ text: prompt }] }],
   }, { timeout: 15000 });
 
   const raw = response.data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-
-  // Strip optional markdown fences
   const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-
   try {
     return JSON.parse(cleaned);
   } catch (err) {
@@ -84,11 +99,10 @@ Input: "${request}"`;
 }
 
 // ---------------------------------------------------------------------------
-// Routes
+// Routes — user-facing (require auth)
 // ---------------------------------------------------------------------------
 
-// POST /tasks — create and optionally fire a new outbound task
-app.post('/tasks', async (req, res) => {
+app.post('/tasks', requireAuth, async (req, res) => {
   const { request } = req.body;
   if (!request || typeof request !== 'string') {
     return res.status(400).json({ error: 'request body must include a "request" string.' });
@@ -106,10 +120,13 @@ app.post('/tasks', async (req, res) => {
     phone_number: rawPhone,
     description,
     business_query: businessQuery,
-    location_hint: locationHint,
+    location_hint: parsedLocationHint,
     scheduled_at,
     user_context: userContext,
   } = parsed;
+
+  // Merge location from direct request body (sent by frontend geolocation) as fallback
+  const locationHint = parsedLocationHint || req.body.location_hint || null;
 
   if (!description) {
     return res.status(400).json({ error: 'Could not determine what to accomplish on the call.' });
@@ -118,7 +135,6 @@ app.post('/tasks', async (req, res) => {
   let phoneNumber = rawPhone || null;
   let businessName = null;
 
-  // If no phone number, search for the business
   if (!phoneNumber) {
     if (!businessQuery) {
       return res.status(400).json({ error: 'Please include a phone number or a business to call.' });
@@ -133,71 +149,87 @@ app.post('/tasks', async (req, res) => {
     logger.info({ businessName, phoneNumber }, 'business resolved');
   }
 
-  // Classify description into agent type + mode
-  const { agentType, agentMode } = await routeToAgent(description);
+  let agentType, agentMode;
+  try {
+    ({ agentType, agentMode } = await routeToAgent(description));
+  } catch (err) {
+    logger.error({ err: err.message }, 'routeToAgent failed');
+    return res.status(500).json({ error: 'Failed to route request to agent.' });
+  }
 
   const webhookBase = process.env.TWILIO_WEBHOOK_BASE || process.env.BASE_URL;
 
-  // Determine if we should fire immediately or schedule
+  // Merge profile personal context with any request-level context
+  let profileContext;
+  try {
+    profileContext = await db.getUserContext(req.user.id);
+  } catch (err) {
+    logger.warn({ err: err.message }, 'getUserContext failed — continuing without profile');
+    profileContext = null;
+  }
+  const mergedContext = userContext
+    ? `${JSON.stringify(profileContext)}\n${userContext}`
+    : JSON.stringify(profileContext);
+
   const fireNow = !scheduled_at || new Date(scheduled_at) <= new Date();
 
   if (fireNow) {
-    const task = db.createTask({
+    const task = await db.createTask({
       description,
       phone_number: phoneNumber,
       scheduled_at: null,
       agent_type: agentType,
       agent_mode: agentMode,
-      user_context: userContext,
+      user_context: mergedContext,
       business_name: businessName,
       location_hint: locationHint,
-    });
-    db.updateTaskStatus(task.id, 'calling');
+    }, req.user.id);
+
+    await db.updateTaskStatus(task.id, 'calling');
 
     try {
       await initiateCall({ taskId: task.id, phoneNumber, webhookBase });
     } catch (err) {
       logger.error({ err: err.message, taskId: task.id }, 'initiateCall failed');
-      db.updateTaskStatus(task.id, 'failed', err.message);
+      await db.updateTaskStatus(task.id, 'failed', err.message);
       return res.status(500).json({ error: 'Failed to initiate call.', detail: err.message });
     }
 
-    const updated = db.getTask(task.id);
+    const updated = await db.getTask(task.id);
     return res.json({ ...updated, status: 'calling' });
   }
 
-  // Future scheduled task
-  const task = db.createTask({
+  const task = await db.createTask({
     description,
     phone_number: phoneNumber,
     scheduled_at,
     agent_type: agentType,
     agent_mode: agentMode,
-    user_context: userContext,
+    user_context: mergedContext,
     business_name: businessName,
     location_hint: locationHint,
-  });
+  }, req.user.id);
+
   logger.info({ taskId: task.id, scheduled_at, agentType }, 'task scheduled');
   return res.json({ ...task, status: 'pending', scheduled_at });
 });
 
-// GET /tasks — list all tasks, newest first
-app.get('/tasks', (_req, res) => {
-  const tasks = db.listTasks();
+app.get('/tasks', requireAuth, async (req, res) => {
+  const tasks = await db.listTasks(req.user.id);
   res.json(tasks);
 });
 
-// GET /tasks/:id — single task with transcripts
-app.get('/tasks/:id', (req, res) => {
-  const task = db.getTask(req.params.id);
+app.get('/tasks/:id', requireAuth, async (req, res) => {
+  const task = await db.getTask(req.params.id);
   if (!task) return res.status(404).json({ error: 'Task not found.' });
+  if (task.user_id !== req.user.id) return res.status(403).json({ error: 'Forbidden.' });
   res.json(task);
 });
 
-// PATCH /tasks/:id — manually complete a calling task with a result
-app.patch('/tasks/:id', (req, res) => {
-  const task = db.getTask(req.params.id);
+app.patch('/tasks/:id', requireAuth, async (req, res) => {
+  const task = await db.getTask(req.params.id);
   if (!task) return res.status(404).json({ error: 'Task not found.' });
+  if (task.user_id !== req.user.id) return res.status(403).json({ error: 'Forbidden.' });
 
   const { status = 'completed', result } = req.body;
   const validStatuses = ['completed', 'failed', 'cancelled'];
@@ -205,28 +237,31 @@ app.patch('/tasks/:id', (req, res) => {
     return res.status(400).json({ error: `status must be one of: ${validStatuses.join(', ')}` });
   }
 
-  db.updateTaskStatus(req.params.id, status, result);
+  await db.updateTaskStatus(req.params.id, status, result);
   if (task.call_sid && ['completed', 'failed'].includes(status)) {
     hangUp(task.call_sid).catch(() => {});
   }
   res.json({ id: req.params.id, status });
 });
 
-// DELETE /tasks/:id — cancel a pending/scheduled task
-app.delete('/tasks/:id', (req, res) => {
-  const task = db.getTask(req.params.id);
+app.delete('/tasks/:id', requireAuth, async (req, res) => {
+  const task = await db.getTask(req.params.id);
   if (!task) return res.status(404).json({ error: 'Task not found.' });
+  if (task.user_id !== req.user.id) return res.status(403).json({ error: 'Forbidden.' });
 
   if (!['pending', 'scheduled'].includes(task.status)) {
     return res.status(400).json({ error: `Cannot cancel a task with status '${task.status}'.` });
   }
 
-  db.updateTaskStatus(req.params.id, 'cancelled');
+  await db.updateTaskStatus(req.params.id, 'cancelled');
   res.json({ id: req.params.id, status: 'cancelled' });
 });
 
-// POST /outbound-twiml — return TwiML to Twilio to start a media stream
-app.post('/outbound-twiml', (req, res) => {
+// ---------------------------------------------------------------------------
+// Twilio webhooks — no auth (Twilio calls these, not users)
+// ---------------------------------------------------------------------------
+
+app.post('/outbound-twiml', requireTwilioSignature, (req, res) => {
   const taskId = req.query.taskId || req.body.taskId;
   const host = getHost(req);
 
@@ -241,46 +276,36 @@ app.post('/outbound-twiml', (req, res) => {
 </Response>`);
 });
 
-// POST /call-status — Twilio statusCallback (form-encoded)
-app.post('/call-status', (req, res) => {
+app.post('/call-status', requireTwilioSignature, async (req, res) => {
   const callStatus = req.body.CallStatus;
   const callSid = req.body.CallSid;
 
   logger.info({ callSid, callStatus }, 'call status update');
 
-  const task = db.getTaskByCallSid(callSid);
-
+  const task = await db.getTaskByCallSid(callSid);
   if (!task) {
     logger.warn({ callSid }, 'call-status: no matching task found');
     return res.sendStatus(200);
   }
 
   if (['no-answer', 'busy', 'failed'].includes(callStatus)) {
-    db.updateTaskStatus(task.id, 'failed', callStatus);
+    await db.updateTaskStatus(task.id, 'failed', callStatus);
   }
-  // 'completed' from Twilio means the call ended — not that the task succeeded.
-  // Actual task success/failure is set by mark_complete or the stream stop handler.
-  // We do not write 'completed' here to avoid racing with those handlers.
 
   res.sendStatus(200);
 });
 
-// GET /api/health
-app.get('/api/health', (_req, res) => {
-  res.json({
-    status: 'ok',
-    activeCalls: db.countActive(),
-    timestamp: new Date().toISOString(),
-  });
+app.get('/api/health', async (_req, res) => {
+  const activeCalls = await db.countActive();
+  res.json({ status: 'ok', activeCalls, timestamp: new Date().toISOString() });
 });
 
-// GET / — serve index.html
 app.get('/', (_req, res) => {
   res.sendFile(path.join(process.cwd(), 'public', 'index.html'));
 });
 
 // ---------------------------------------------------------------------------
-// WebSocket: /stream — Twilio Media Streams handler
+// WebSocket: /stream — Twilio Media Streams (no user auth — Twilio connects here)
 // ---------------------------------------------------------------------------
 app.ws('/stream', (ws, _req) => {
   let agent = null;
@@ -289,108 +314,103 @@ app.ws('/stream', (ws, _req) => {
   let streamSid = null;
 
   ws.on('message', (data) => {
-    let msg;
-    try {
-      msg = JSON.parse(data);
-    } catch {
-      return;
-    }
-
-    if (msg.event === 'start') {
-      callSid = msg.start.callSid;
-      taskId = msg.start.customParameters?.taskId;
-      streamSid = msg.start.streamSid;
-
-      logger.info({ callSid, taskId, streamSid }, 'stream started');
-
-      if (!taskId) {
-        logger.error('no taskId in stream start — closing');
-        ws.close();
+    (async () => {
+      let msg;
+      try {
+        msg = JSON.parse(data);
+      } catch {
         return;
       }
 
-      const task = db.getTask(taskId);
-      if (!task) {
-        logger.error({ taskId }, 'task not found for stream');
-        ws.close();
-        return;
+      if (msg.event === 'start') {
+        callSid = msg.start.callSid;
+        taskId = msg.start.customParameters?.taskId;
+        streamSid = msg.start.streamSid;
+
+        logger.info({ callSid, taskId, streamSid }, 'stream started');
+
+        if (!taskId) {
+          logger.error('no taskId in stream start — closing');
+          ws.close();
+          return;
+        }
+
+        const task = await db.getTask(taskId);
+        if (!task) {
+          logger.error({ taskId }, 'task not found for stream');
+          ws.close();
+          return;
+        }
+        // Verify the callSid from Twilio matches what we stored when the call was placed.
+        // Guards against a rogue WebSocket client supplying a known taskId.
+        if (task.call_sid && task.call_sid !== callSid) {
+          logger.error({ taskId, expected: task.call_sid, got: callSid }, 'callSid mismatch — closing stream');
+          ws.close();
+          return;
+        }
+
+        await db.updateCallSid(taskId, callSid);
+        await db.updateTaskStatus(taskId, 'calling');
+
+        agent = new OutboundAgent({
+          taskId,
+          description: task.description,
+          phoneNumber: task.phone_number,
+          agentType:   task.agent_type  || 'generic',
+          agentMode:   task.agent_mode  || null,
+          userContext: task.user_context || null,
+
+          onAudioOut: (pcm24k) => {
+            const pcm8k = audio.downsample24to8(pcm24k);
+            const mulaw = audio.mulawEncode(pcm8k);
+            const payload = mulaw.toString('base64');
+            if (ws.readyState === ws.OPEN) {
+              ws.send(JSON.stringify({ event: 'media', streamSid, media: { payload } }));
+            }
+          },
+
+          onMarkComplete: async (result, status = 'completed') => {
+            await db.updateTaskStatus(taskId, status, result);
+            try {
+              await hangUp(callSid);
+            } catch (err) {
+              logger.warn({ err: err.message }, 'hangUp after completion failed');
+            }
+          },
+
+          onAgentText: (text) => db.addTranscript(taskId, 'assistant', text),
+          onUserText: (text) => db.addTranscript(taskId, 'user', text),
+        });
+
+        agent.connect();
       }
 
-      db.updateCallSid(taskId, callSid);
-      db.updateTaskStatus(taskId, 'calling');
-
-      agent = new OutboundAgent({
-        taskId,
-        description: task.description,
-        phoneNumber: task.phone_number,
-        agentType:   task.agent_type  || 'generic',
-        agentMode:   task.agent_mode  || null,
-        userContext: task.user_context || null,
-
-        onAudioOut: (pcm24k) => {
-          const pcm8k = audio.downsample24to8(pcm24k);
-          const mulaw = audio.mulawEncode(pcm8k);
-          const payload = mulaw.toString('base64');
-          if (ws.readyState === ws.OPEN) {
-            ws.send(JSON.stringify({
-              event: 'media',
-              streamSid,
-              media: { payload },
-            }));
-          }
-        },
-
-        onMarkComplete: async (result, status = 'completed') => {
-          db.updateTaskStatus(taskId, status, result);
-          try {
-            await hangUp(callSid);
-          } catch (err) {
-            logger.warn({ err: err.message }, 'hangUp after completion failed');
-          }
-        },
-
-        onAgentText: (text) => db.addTranscript(taskId, 'assistant', text),
-        onUserText: (text) => db.addTranscript(taskId, 'user', text),
-      });
-
-      agent.connect();
-    }
-
-    if (msg.event === 'media' && agent) {
-      const mulaw = Buffer.from(msg.media.payload, 'base64');
-      const pcm8k = audio.mulawDecode(mulaw);
-      const pcm48k = audio.upsample8to48(pcm8k);
-      agent.sendPcmFrame(pcm48k);
-    }
-
-    if (msg.event === 'stop') {
-      logger.info({ callSid, taskId }, 'stream stopped');
-      if (agent) {
-        agent.disconnect();
-        agent = null;
+      if (msg.event === 'media' && agent) {
+        const mulaw = Buffer.from(msg.media.payload, 'base64');
+        const pcm8k = audio.mulawDecode(mulaw);
+        const pcm48k = audio.upsample8to48(pcm8k);
+        agent.sendPcmFrame(pcm48k);
       }
-      const task = taskId ? db.getTask(taskId) : null;
-      if (task && !['completed', 'failed', 'cancelled'].includes(task.status)) {
-        // Stream ended without mark_complete — treat as incomplete/interrupted
-        db.updateTaskStatus(taskId, 'failed', 'Call ended without completing the task');
+
+      if (msg.event === 'stop') {
+        logger.info({ callSid, taskId }, 'stream stopped');
+        if (agent) { agent.disconnect(); agent = null; }
+        const task = taskId ? await db.getTask(taskId) : null;
+        if (task && !['completed', 'failed', 'cancelled'].includes(task.status)) {
+          await db.updateTaskStatus(taskId, 'failed', 'Call ended without completing the task');
+        }
       }
-    }
+    })().catch(err => logger.error({ err: err.message }, 'stream message handler error'));
   });
 
   ws.on('close', () => {
     logger.info({ callSid, taskId }, 'WebSocket closed');
-    if (agent) {
-      agent.disconnect();
-      agent = null;
-    }
+    if (agent) { agent.disconnect(); agent = null; }
   });
 
   ws.on('error', (err) => {
     logger.error({ err: err.message, callSid, taskId }, 'WebSocket error');
-    if (agent) {
-      agent.disconnect();
-      agent = null;
-    }
+    if (agent) { agent.disconnect(); agent = null; }
   });
 });
 
