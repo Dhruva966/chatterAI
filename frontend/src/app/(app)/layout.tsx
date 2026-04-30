@@ -8,11 +8,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: tasks } = await supabase
-    .from('tasks')
-    .select('id, description, status, created_at')
-    .order('created_at', { ascending: false })
-
   const fullName: string = user.user_metadata?.full_name || ''
   const initials = fullName
     .split(' ')
@@ -24,7 +19,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar
-        tasks={tasks || []}
+        tasks={[]}
         user={{ name: fullName || user.email || 'User', email: user.email || '', initials }}
       />
       <main className="flex-1 overflow-y-auto min-w-0">
