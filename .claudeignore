@@ -1,0 +1,9 @@
+# Archived files — old ideas, not part of active development.
+# Claude Code will not read these unless explicitly instructed.
+archive/
+
+# Runtime artifacts — not source
+data/
+
+# Secrets
+.env

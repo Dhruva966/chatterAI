@@ -302,3 +302,76 @@ to change. If ≥7 have a story, build Approach A immediately.
 - You came in with more pre-research than most pre-product founders. ECPA all-party consent,
   Otter's class action lawsuit, VAPI latency benchmarks, Deepgram vs. AssemblyAI — you've
   done the work. The gap isn't technical readiness. It's demand validation.
+
+---
+
+## Architecture Update — 2026-04-24
+
+### The cost problem
+
+After building Approach A: 2 test calls = $0.65 (~$0.33/call). Twilio is ~80% of
+per-call cost. This is unviable at scale. A second /office-hours session evaluated four paths.
+
+### Key technical constraint (confirmed)
+
+iOS and Android do not allow third-party apps to intercept active carrier call audio.
+The OS telephony stack owns the audio session — other apps are locked out. This rules
+out the "app listens to the call and injects audio" vision entirely.
+
+For person 2 to hear Chatter, audio must enter the carrier's phone network via 3-way
+bridging. The choice is: which provider, and who initiates the bridge.
+
+### Cost comparison (5-minute call)
+
+| Path | Total/5-min call | vs. Twilio | Build time |
+|------|-----------------|------------|------------|
+| Twilio (current) | ~$0.33 | baseline | done |
+| SignalWire (PSTN swap) | ~$0.19 | -42% | 1–2 days |
+| LiveKit VoIP managed | ~$0.12 | -63% | 5–9 weeks |
+| LiveKit VoIP self-hosted | ~$0.075 | -77% | 5–9 weeks |
+
+AI costs (Deepgram + Gemini) are ~$0.067/5-min call regardless of path.
+
+### Revised Approach A': SignalWire migration (immediate, 1–2 days)
+
+Same PSTN conference bridge, different carrier. SignalWire is Twilio API-compatible.
+
+**Migration steps:**
+1. Create SignalWire account at signalwire.com
+2. Provision phone number in SignalWire dashboard
+3. `npm install @signalwire/compatibility-api`
+4. `src/conference.js`: swap `require('twilio')` → `require('@signalwire/compatibility-api')`
+5. Update `.env`: replace Twilio credentials with SignalWire equivalents
+6. Update webhook URLs in SignalWire dashboard
+7. Test call flow
+
+Pricing: inbound $0.0066/min, outbound $0.0080/min (vs. Twilio $0.0085/$0.013/min)
+
+### Revised Approach B': LiveKit VoIP — FaceTime link model (30-day roadmap)
+
+Replace PSTN entirely with WebRTC. Person 1 uses an iOS app. Person 2 gets a link
+(like a FaceTime link) and joins in Safari/Chrome with no install. Chatter AI is a
+participant in the LiveKit WebRTC room. Both parties hear it.
+
+```
+Person 1 (iOS app)       ──WebRTC──┐
+                                   ├── LiveKit Room ── Chatter AI
+Person 2 (Safari/Chrome) ──────────┘
+```
+
+**Stack:** LiveKit Cloud + LiveKit Swift SDK (iOS) + LiveKit JS SDK (browser join page)
++ LiveKit Agents (replaces raw Deepgram WS) + Deepgram STT + Gemini + Deepgram TTS
+
+**Timeline:** 5–9 weeks including App Store review (1–3 week review).
+
+**Key trade-off:** Person 2 taps a link instead of receiving a normal phone call.
+Test whether target users (founders, researchers) find this acceptable.
+
+### Updated recommendation and sequencing
+
+1. **This week:** SignalWire swap (1–2 days). Cost drops to ~$0.19/call.
+2. **Before any new build:** 10-person demand validation (from original assignment).
+3. **Month 2–3:** LiveKit iOS app if ≥7/10 interviewees have a specific unprompted story.
+
+The original assignment is still the gate. Do not spend 6 weeks on LiveKit until
+demand is confirmed outside the founding team.

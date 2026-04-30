@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ChatterAI — Live Demo</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary:       #6e56cf;
+      --primary-hover: #7c67d4;
+      --primary-muted: rgba(110,86,207,0.1);
+      --bg:            #f5f5ff;
+      --fg:            #2a2a4a;
+      --fg-2:          #6b6b8e;
+      --fg-3:          #9898b5;
+      --card:          #ffffff;
+      --border:        #e0e0f0;
+      --border-hi:     #c5c5e0;
+      --green:         #22c55e;
+      --red:           #ef4444;
+      --font-sans:     'Inter', ui-sans-serif, system-ui, sans-serif;
+      --font-mono:     'JetBrains Mono', ui-monospace, monospace;
+      --r:             8px;
+      --r-sm:          4px;
+    }
+    html.dark {
+      --primary:       #a48fff;
+      --primary-hover: #b39fff;
+      --primary-muted: rgba(164,143,255,0.12);
+      --bg:            #0f0f1a;
+      --fg:            #e2e2f5;
+      --fg-2:          #9898b5;
+      --fg-3:          #5a5a7a;
+      --card:          #1e1e32;
+      --border:        #2a2a45;
+      --border-hi:     #3a3a58;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--fg);
+      font-family: var(--font-sans);
+      -webkit-font-smoothing: antialiased;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100dvh;
+      padding: 24px;
+    }
+
+    /* Grid bg */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(110,86,207,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(110,86,207,0.04) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+    }
+
+    .wrap {
+      width: 100%;
+      max-width: 380px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .top-bar {
+      height: 3px;
+      background: var(--primary);
+      border-radius: 2px;
+      margin-bottom: 36px;
+    }
+
+    .wordmark {
+      font-family: var(--font-mono);
+      font-size: 20px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      color: var(--fg);
+      margin-bottom: 4px;
+    }
+
+    .wordmark .accent { color: var(--primary); }
+
+    .tagline {
+      font-size: 13px;
+      color: var(--fg-2);
+      margin-bottom: 32px;
+    }
+
+    .demo-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(34,197,94,0.1);
+      border: 1px solid rgba(34,197,94,0.3);
+      border-radius: 100px;
+      padding: 3px 10px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--green);
+      margin-bottom: 24px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+
+    .card-title {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--fg-3);
+      margin-bottom: 16px;
+    }
+
+    .creds-box {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+      padding: 12px 14px;
+      margin-bottom: 10px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .creds-label { color: var(--fg-3); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; }
+    .creds-value { color: var(--fg); font-weight: 500; }
+
+    .field-group { margin-bottom: 14px; }
+
+    .field-label {
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 9px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--fg-3);
+      margin-bottom: 6px;
+    }
+
+    .field-input {
+      width: 100%;
+      background: var(--bg);
+      border: 1.5px solid var(--border);
+      border-radius: var(--r-sm);
+      color: var(--fg);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      padding: 10px 14px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .field-input:focus { border-color: var(--primary); }
+
+    .btn-login {
+      width: 100%;
+      padding: 12px;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: var(--r-sm);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.12s, transform 0.1s;
+      margin-top: 4px;
+    }
+
+    .btn-login:hover { background: var(--primary-hover); transform: translateY(-1px); }
+    .btn-login:active { transform: translateY(0); }
+    .btn-login:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .error-msg {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--red);
+      min-height: 16px;
+      margin-top: 10px;
+      text-align: center;
+    }
+
+    .footer-note {
+      display: flex;
+      justify-content: space-between;
+      font-family: var(--font-mono);
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--fg-3);
+      margin-top: 28px;
+    }
+
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 20px 0;
+    }
+
+    .hint {
+      font-size: 12px;
+      color: var(--fg-2);
+      line-height: 1.6;
+      text-align: center;
+      margin-bottom: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top-bar"></div>
+
+    <div class="wordmark">CHATTER<span class="accent">AI</span></div>
+    <div class="tagline">AI agent that makes outbound calls on your behalf</div>
+
+    <div class="demo-badge">
+      <svg width="6" height="6" viewBox="0 0 6 6"><circle cx="3" cy="3" r="3" fill="#22c55e"/></svg>
+      Live Demo
+    </div>
+
+    <div class="card">
+      <div class="card-title">Demo Credentials</div>
+      <div class="creds-box">
+        <span class="creds-label">Username</span>
+        <span class="creds-value">test123</span>
+      </div>
+      <div class="creds-box">
+        <span class="creds-label">Password</span>
+        <span class="creds-value">tickmosh</span>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="card-title">Sign In</div>
+      <div class="field-group">
+        <label class="field-label" for="d-user">Username</label>
+        <input class="field-input" id="d-user" type="text" placeholder="test123" autocomplete="username">
+      </div>
+      <div class="field-group">
+        <label class="field-label" for="d-pass">Password</label>
+        <input class="field-input" id="d-pass" type="password" placeholder="tickmosh" autocomplete="current-password">
+      </div>
+      <button class="btn-login" id="login-btn" onclick="doLogin()">Enter Demo →</button>
+      <div class="error-msg" id="login-error"></div>
+    </div>
+
+    <div class="hint">This is a live demo pre-loaded with $5 in credits.<br>Each simulated call costs $1. No real calls are made.</div>
+
+    <div class="footer-note">
+      <span>ChatterAI Demo</span>
+      <span>v0.1.0</span>
+    </div>
+  </div>
+
+  <script>
+    // Pre-fill credentials for convenience
+    document.getElementById('d-user').value = 'test123';
+    document.getElementById('d-pass').value = 'tickmosh';
+
+    document.getElementById('d-pass').addEventListener('keydown', e => {
+      if (e.key === 'Enter') doLogin();
+    });
+
+    function doLogin() {
+      const user = document.getElementById('d-user').value.trim().toLowerCase();
+      const pass = document.getElementById('d-pass').value.trim();
+      const err  = document.getElementById('login-error');
+      const btn  = document.getElementById('login-btn');
+
+      err.textContent = '';
+
+      // Accept test123/tickmosh OR any non-empty credentials for the demo
+      const validUser = user === 'test123' || user.length > 0;
+      const validPass = pass === 'tickmosh' || pass.length > 0;
+
+      if (user === '' || pass === '') {
+        err.textContent = 'Please enter credentials.';
+        return;
+      }
+
+      // Wrong credentials only if they typed something *other than* test123/tickmosh
+      // and also not blank — demo always accepts the listed creds
+      if (user !== 'test123' || pass !== 'tickmosh') {
+        if (user !== 'test123') { err.textContent = 'Unknown username — try test123'; return; }
+        if (pass !== 'tickmosh') { err.textContent = 'Wrong password — try tickmosh'; return; }
+      }
+
+      btn.textContent = 'Signing in…';
+      btn.disabled = true;
+
+      setTimeout(() => {
+        // Set demo session
+        sessionStorage.setItem('chatter_authed', '1');
+        sessionStorage.setItem('chatter_user_email', 'test123@demo.chatterai.dev');
+
+        // Pre-load $5 credits if not already set
+        if (!localStorage.getItem('chatter_credits')) {
+          localStorage.setItem('chatter_credits', '5');
+        }
+
+        // Pre-load demo usage history if empty
+        if (!localStorage.getItem('chatter_usage_log')) {
+          const preloaded = [
+            { id: 'demo-1', label: 'Order taro boba pickup at 5pm from TeaTop SF', cost: 1.00, ts: Date.now() - 3600000 },
+            { id: 'demo-2', label: 'Book haircut appointment at Studio 88 for Saturday', cost: 1.00, ts: Date.now() - 7200000 },
+          ];
+          localStorage.setItem('chatter_usage_log', JSON.stringify(preloaded));
+          localStorage.setItem('chatter_charged_tasks', JSON.stringify(['demo-1', 'demo-2']));
+          // Reflect those 2 calls in credit balance
+          if (parseFloat(localStorage.getItem('chatter_credits')) === 5) {
+            localStorage.setItem('chatter_credits', '3');
+          }
+        }
+
+        window.location.href = '/index.html';
+      }, 700);
+    }
+  </script>
+</body>
+</html>

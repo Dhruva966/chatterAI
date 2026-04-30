@@ -1,211 +1,154 @@
-# Chatter — Architecture Decision Records
+# Outbound AI — Architecture Decision Records
 
-Single reference for every non-obvious engineering choice made during design.
-Update this file when a decision changes. Date each entry.
-
----
-
-## ADR-001: Wake word via transcript final-result matching (2026-04-24)
-
-**Decision:** Detect "hey chatter" (case-insensitive, exact phrase) on Deepgram
-FINAL transcripts. Not interim transcripts.
-
-**Alternatives considered:**
-- Picovoice Porcupine (on-device, <50ms): Rejected for Approach A. Audio arrives
-  via Twilio Media Streams (server-side), not a local microphone. Porcupine requires
-  local audio access.
-- DTMF trigger (*1 to activate): Considered. Rejected because it requires both
-  parties to know the gesture and adds friction.
-- Transcript substring/partial match: Rejected. Too many false positives on interim
-  results (Deepgram frequently produces mid-word partials that resolve to different text).
-
-**Accepted limitations:**
-- False positives: conversational mentions of "hey chatter" or "chatter" will trigger.
-  Acceptable for 2-founder internal test (low ambient usage of the phrase).
-- False negatives: ~30-40% on 8kHz noisy car audio. Acceptable for MVP.
-- Approach B will use Picovoice Porcupine on-device via iOS/Android app.
-
-**Safeguards implemented:**
-- Match only on `is_final: true` Deepgram events
-- 3-second cooldown after Chatter's TTS response completes
-- Deepgram muted (frames not forwarded) while Chatter is speaking (prevents self-trigger)
-- Strip Chatter's own utterances from transcript before wake-word check
+Single reference for every non-obvious engineering choice.
+Update when a decision changes. Date each entry.
 
 ---
 
-## ADR-002: Latency ceiling raised to 4s (2026-04-24)
+## ADR-001: Deepgram Voice Agent as conversation engine (2026-04-26)
 
-**Decision:** Target end-to-end latency ≤4s (wake word detected → audio audible).
-Design doc specified 2s. Raised because web search is non-negotiable.
+**Decision:** Use Deepgram Voice Agent (single bidirectional WebSocket) for the
+entire STT → LLM → TTS pipeline instead of three separate API calls.
 
-**Why 4s not 2s:** Web search tool call adds 800-1300ms to every query that
-requires external lookup. Measured breakdown:
-- Deepgram endpointing: 300-500ms
-- STT finalization: 100-300ms
-- Claude TTFB (Sonnet): 800-2000ms
-- Web search (Exa): 800-1300ms (parallel with Claude where possible)
-- ElevenLabs TTFB (Flash v2): 200-400ms
-- Twilio Media Streams injection: 60-120ms
-- Total realistic on LTE: 3-5s
+**Alternatives rejected:**
+- Deepgram STT → Claude → ElevenLabs TTS: Three separate API calls per turn,
+  multiple points of failure, latency from chaining. Eliminated.
+- Deepgram STT → Gemini → Deepgram TTS: Same chaining problem.
 
-**Optimization levers (if 4s is still too slow):**
-1. Stream ElevenLabs TTS from first token (don't wait for full Claude response)
-2. Run web search in parallel with Claude's initial reasoning (speculative fetch)
-3. Use Claude haiku for simple queries (when web search not needed)
-4. Pre-warm ElevenLabs connection
+**Why Voice Agent wins:**
+- One WebSocket handles STT (Nova-2), LLM (Gemini 2.5 Flash), TTS (Aura) internally
+- Audio I/O in one place — no inter-service audio routing
+- Eliminates ElevenLabs mulaw compatibility as a blocker
+- Built-in function calling via `think.functions` config
 
-**Measure on first real call.** If p50 exceeds 5s, implement optimization lever 1.
+**Accepted trade-offs:**
+- Less control over individual components (can't swap TTS voice easily)
+- Gemini is the only LLM option (can't use Claude directly in the agent loop)
+- Voice Agent pricing includes all three components — no mix-and-match cost optimization
 
 ---
 
-## ADR-003: No transcript summarization (2026-04-24)
+## ADR-002: Two separate Gemini calls — parse then route (2026-04-26)
 
-**Decision:** Keep raw rolling transcript. No Claude summarization of older content.
+**Decision:** Task creation uses two sequential Gemini 2.5 Flash calls:
+1. Parse the natural language request → structured fields (phone, description, schedule, context)
+2. Route the description → agent_type + agent_mode
 
-**Why the design doc was wrong:** Design doc planned summarization at 10-min intervals
-to manage context. But Claude Sonnet has 200K token context. 10 min of speech ≈ 1700
-tokens. Summarization would be needed only at ~100 minutes of raw transcript.
-Summarization adds cost (~$0.003/event), latency, and destroys specificity.
+**Why not combined:** Routing logic needs to evolve independently of parsing logic.
+Mixing them into one prompt makes prompt engineering fragile — a change to the routing
+criteria risks breaking field extraction and vice versa.
 
-**Sliding window safety valve:** If transcript exceeds 150K tokens (>~850 min —
-never in practice for a working call), drop the oldest 20% of turns.
-
----
-
-## ADR-004: Deepgram WebSocket reconnect on LTE drop (2026-04-24)
-
-**Decision:** Implement exponential backoff reconnect on Deepgram WebSocket
-disconnection. Reconnect up to 3 times before giving up.
-
-**Why:** LTE handoffs in a moving car will drop the WebSocket. Without reconnect,
-Chatter silently goes deaf with no recovery path. Users have no indication why
-Chatter stopped responding.
-
-**Implementation:** On `close` or `error` event, wait 500ms → 1000ms → 2000ms.
-Buffer incoming Twilio Media Streams audio frames during reconnect (ring buffer,
-max 2s). Flush buffer to Deepgram after reconnect. Discard if reconnect fails.
-Notify conference if all reconnects fail: "Chatter lost connection. Reconnecting..."
+**Why Gemini not Claude:** User has Gemini API key. Cost. Gemini 2.5 Flash is
+sufficient for structured extraction and classification tasks.
 
 ---
 
-## ADR-005: Mute Deepgram while Chatter speaks (2026-04-24)
+## ADR-003: SQLite WAL for persistence (2026-04-26)
 
-**Decision:** Stop forwarding Media Streams audio frames to Deepgram while Chatter's
-TTS is playing. Resume immediately after playback ends.
+**Decision:** Use `better-sqlite3` with WAL journal mode for tasks + transcripts.
 
-**Why:** The Twilio conference mix includes Chatter's own audio. Without muting,
-Deepgram transcribes Chatter's TTS output and adds it to the rolling transcript as
-if it were a human utterance. This corrupts context and can trigger recursive wake
-word detection if Chatter says "hey chatter" in a response.
+**Why not Postgres/Redis:** Zero infra. Single-server MVP. SQLite handles the
+read/write pattern (frequent transcript inserts, occasional task reads) fine
+at this scale.
 
-**Implementation:** `let chatterSpeaking = false` flag in stt.js. Set true when
-first TTS frame is sent. Set false when last TTS frame is sent + 500ms buffer.
+**WAL mode reason:** node-cron scheduler ticks every minute, potentially reading
+while Express is writing. WAL allows concurrent readers without blocking writers.
 
----
-
-## ADR-006: ElevenLabs fallback to Amazon Polly (2026-04-24)
-
-**Decision:** If spikes/elevenlabs-compat.js fails (mulaw 8kHz incompatibility with
-Twilio Media Streams), switch TTS to Amazon Polly.
-
-**Polly config:** Voice: Joanna (or Matthew), Engine: neural, SampleRate: 8000,
-OutputFormat: pcm (then transcode to mulaw via ffmpeg). OR OutputFormat: pcm
-injected directly if Twilio accepts it (test separately).
-
-**ElevenLabs mulaw format:** Request `output_format: "ulaw_8000"`. This requests
-8kHz mulaw output. Twilio Media Streams expects exactly this format in 20ms frames
-(160 bytes/frame). The compatibility is the unknown.
+**Schema migration strategy:** Additive-only via `try/catch ALTER TABLE`. No migration
+tool. Safe to re-run on startup. If a column already exists, the error is swallowed.
 
 ---
 
-## ADR-007: Consent IVR state machine (2026-04-24)
+## ADR-004: Atomic task claim in scheduler (2026-04-26)
 
-**Decision:** 
+**Decision:** Scheduler uses `UPDATE tasks SET status = 'calling' WHERE id = ? AND status = 'pending'`
+to claim a task before firing it. If `changes === 0`, another process already claimed it — skip.
 
-```
-States: WAITING_CONSENT → ACTIVE → DEPARTED
-
-WAITING_CONSENT (both parties):
-  - Party presses 1: record consent
-  - Both consented: → ACTIVE
-  - 10s timeout (either party): Chatter announces departure → DEPARTED
-  - Party presses 2: Chatter announces departure → DEPARTED
-
-ACTIVE:
-  - Either party presses 2: → DEPARTED
-  - Late joiner (joins after consent window): Chatter exits (cannot retroactively
-    consent a party who wasn't present for the IVR)
-  - No re-enable in Approach A (would require second IVR pass, deferred to Approach B)
-
-DEPARTED:
-  - Terminal. Chatter's Twilio leg disconnects.
-```
-
-**ECPA compliance note:** This IVR constitutes all-party consent for recording/AI
-participation. California (strictest) requires ALL parties to consent before
-any recording begins. The 10s timeout handles non-responsive parties by removing
-Chatter. Legal review required before non-founder users.
+**Why:** node-cron fires on every minute tick. If the server restarts mid-tick, or if
+two processes run simultaneously, the same scheduled task could fire twice (duplicate calls).
+The atomic UPDATE prevents double-fire without a distributed lock.
 
 ---
 
-## ADR-008: Structured logging with Pino (2026-04-24)
+## ADR-005: mark_complete as the call termination signal (2026-04-26)
 
-**Decision:** Use Pino for structured JSON logging. Pretty-print in development.
+**Decision:** The Deepgram Voice Agent is given a `mark_complete` function tool.
+When the agent calls it, the server receives a `FunctionCallRequest`, updates the
+task status + result in SQLite, then calls Twilio `calls(callSid).update({ status: 'completed' })`
+to hang up.
 
-**Log every:**
-- Wake word trigger (timestamp, phrase matched, transcript context, conference SID)
-- Claude API call (input tokens, output tokens, latency_ms, tool_called)
-- ElevenLabs call (TTFB_ms, bytes, voice_id)
-- Deepgram reconnect (attempt number, reason)
-- Consent event (party, action, timestamp)
-- Error (type, message, conference SID, stack)
+**Why not hang up on call end event:** The call end event fires after the call is
+already over. `mark_complete` lets the agent signal task completion before the call
+ends, capturing the result while the WebSocket is still alive.
 
-**Why:** Without structured logs, debugging "Chatter interrupted us on a call last
-Tuesday" is impossible. With structured logs: query by conference SID + timestamp
-range, see all wake word triggers, confirm whether they were intentional.
-
----
-
-## ADR-009: Switched to Deepgram Voice Agent + Gemini 2.5 Flash (2026-04-24)
-
-**Decision:** Replace the 3-API pipeline (Deepgram STT → Claude → ElevenLabs TTS)
-with the Deepgram Voice Agent — a single bidirectional WebSocket that handles
-STT (Deepgram Flux), LLM (Gemini 2.5 Flash), and TTS (Deepgram Aura) internally.
-
-**Why:**
-- Simpler: one WebSocket instead of three separate API calls per query
-- Eliminates ElevenLabs/Twilio mulaw compatibility as a P0 blocker
-- Gemini 2.5 Flash preferred for demos (lower cost, user's key)
-- Deepgram Aura TTS output format known-compatible with agent's 24kHz PCM output
-
-**Audio transcoding required (ADR-009 carries this):**
-- Twilio sends mulaw 8kHz → must transcode to linear16 48kHz for Deepgram Agent input
-- Deepgram Agent sends linear16 24kHz → must transcode to mulaw 8kHz for Twilio injection
-- Implemented in src/audio.js (G.711 mulaw codec + linear interpolation resampling)
-
-**Wake word behavior change:**
-- Old: explicit "hey chatter" transcript match → trigger Claude call
-- New: Deepgram Agent always listening; prompt instructs it to only respond when
-  addressed as "Chatter" or "Hey Chatter". LLM-level gate, not audio-level.
-- Acceptable for demos. Will tune if false-positive rate is too high.
-
-**Web search:**
-- Kept in EXA_API_KEY / src/llm.js for explicit tool calls
-- Deepgram Voice Agent doesn't expose web search as a native tool call yet
-- TODO: wire Exa as a function_call in the agent's `think.functions` config
-  so Gemini can invoke it. See Deepgram Voice Agent function calling docs.
-
-**Files changed:** src/agent.js (new), src/audio.js (new), src/conference.js (rewrite)
-**Files now optional:** src/llm.js, src/tts.js, src/stt.js (kept for fallback/future)
+**Required behavior:** Every system prompt in `agent-configs.js` instructs the agent
+to always call `mark_complete` when done — whether successful, voicemail, or failed.
+Without this, calls run until Twilio's timeout.
 
 ---
 
-## Open decisions (unresolved as of 2026-04-24)
+## ADR-006: Exa search + Gemini fallback for phone number lookup (2026-04-26)
 
-1. **Approach B fallback architecture** — if iOS 3-way carrier merge fails on
-   AT&T/Verizon/T-Mobile. Candidates: VAPI media streaming, Radisys open telecom
-   integration. Not blocking Approach A.
+**Decision:** When a task has no phone number, use:
+1. Exa `searchAndContents` to find business pages
+2. Regex extraction on text/highlights (fast, no LLM cost)
+3. Gemini fallback if regex finds nothing (parse Exa content)
 
-2. **Pricing model** — $1.87/30-min call infra cost makes flat $5-10/month
-   inverted for heavy users. Usage-based pricing likely needed. Not blocking
-   Approach A (internal test, no pricing needed yet).
+**Known limitation:** Phone numbers extracted this way can be wrong (wrong location,
+outdated listing). No validation that the number is correct before dialing.
+
+**Acceptable for now:** Internal use only. Fix when false dials become a problem.
+Long-term: Google Places API or similar verified directory.
+
+---
+
+## ADR-007: Pino structured logging (2026-04-26)
+
+**Decision:** Use Pino for all server logging. JSON in production, pretty-print in dev.
+
+**What is logged at minimum:**
+- Deepgram WS open/close/error (taskId)
+- Agent routing decision (description, agentType, agentMode)
+- mark_complete received (taskId, result)
+- Call status updates (callSid, callStatus)
+- All errors with taskId + message
+
+**Why:** Without structured logs, debugging a failed call after the fact is impossible.
+Querying by taskId shows the full lifecycle of a call in sequence.
+
+---
+
+## ADR-008: CLI as primary interface (2026-04-26)
+
+**Decision:** The primary UX is a CLI that submits a task and streams the transcript
+live via 2-second polling of `GET /tasks/:id`.
+
+**Why not a web UI:** Fastest to build and use. The transcript stream IS the product
+experience — a terminal does this well. Web UI is a future milestone.
+
+**Why polling not WebSocket/SSE:** Simpler. The 2s polling lag is acceptable for
+a transcript viewer. SSE or WebSocket would be needed only if sub-second streaming
+is required — it isn't for this use case.
+
+**Note:** CLI reads `task.transcripts` (the field returned by `db.getTask()`). Any
+code that reads `task.transcript` (no s) will silently receive `undefined`.
+
+---
+
+## Open Decisions
+
+1. **Business phone number validation** — no check that the found number is correct
+   before dialing. Need to evaluate Google Places API vs. manual confirmation step.
+
+2. **Web UI** — design direction (mission control aesthetic, amber accent, transcript as hero)
+   is documented in `.impeccable.md` at the project root. Not built yet. When building:
+   task input at top, live transcript stream in center, status indicators.
+
+3. **Concurrent call limit** — `countActive()` is tracked but no hard cap enforced.
+   Decide on max concurrent Twilio calls before exposing to non-founder users.
+
+4. **Auth on POST /tasks** — none. Any caller who can reach the server can trigger
+   outbound calls. Required before any non-localhost deployment.
+
+5. **Cost tracking** — no per-task cost logging. Needed before pricing decisions.
+   Track: Twilio minutes, Deepgram VA seconds, Gemini tokens per task.

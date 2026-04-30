@@ -4,3 +4,6 @@ tmp/
 *.log
 .DS_Store
 .mcp.json
+data/
+.gstack/
+

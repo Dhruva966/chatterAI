@@ -1,21 +1,25 @@
 {
-  "name": "chatter-ai",
+  "name": "outbound-ai",
   "version": "0.1.0",
-  "description": "AI third participant on live PSTN calls",
+  "description": "AI agent that makes outbound phone calls on your behalf",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "spike": "node spikes/elevenlabs-compat.js",
-    "lint": "eslint src/"
+    "cli": "node src/cli.js"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.39.0",
     "@deepgram/sdk": "^3.9.0",
+    "@supabase/supabase-js": "^2.105.0",
     "axios": "^1.7.0",
+    "better-sqlite3": "^12.9.0",
+    "cors": "^2.8.6",
     "dotenv": "^16.4.0",
     "exa-js": "^2.12.1",
     "express": "^4.21.0",
+    "express-ws": "^5.0.2",
+    "node-cron": "^4.2.1",
     "pino": "^9.5.0",
     "twilio": "^5.4.0",
     "ws": "^8.18.0"

@@ -1,16 +1,34 @@
 require('dotenv').config();
-const http = require('http');
-const app = require('./server');
-const { setupMediaStreamServer } = require('./conference');
+
+const REQUIRED_ENV = [
+  'DEEPGRAM_API_KEY',
+  'GEMINI_API_KEY',
+  'TWILIO_ACCOUNT_SID',
+  'TWILIO_AUTH_TOKEN',
+  'TWILIO_PHONE_NUMBER',
+  'SUPABASE_URL',
+  'SUPABASE_SERVICE_ROLE_KEY',
+  'SUPABASE_ANON_KEY',
+];
+for (const key of REQUIRED_ENV) {
+  if (!process.env[key]) {
+    console.error(`Missing required env var: ${key}`);
+    process.exit(1);
+  }
+}
+
+const { app, server } = require('./server');
+const { startScheduler } = require('./scheduler');
 const logger = require('./logger');
 
 const PORT = process.env.PORT || 3000;
 
-const server = http.createServer(app);
-
-// Attach Twilio Media Streams WebSocket handler (ADR-005, ADR-004)
-setupMediaStreamServer(server);
+const webhookBase = process.env.TWILIO_WEBHOOK_BASE || process.env.BASE_URL;
+if (!webhookBase) {
+  logger.warn('TWILIO_WEBHOOK_BASE not set — Twilio webhooks will fail');
+}
 
 server.listen(PORT, () => {
-  logger.info({ port: PORT, env: process.env.NODE_ENV }, 'chatter server started');
+  logger.info({ port: PORT, webhookBase }, 'server started');
+  startScheduler();
 });
