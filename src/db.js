@@ -114,11 +114,54 @@ async function getTaskByCallSid(callSid) {
   return data || null;
 }
 
+async function getUserEmail(userId) {
+  const { data } = await supabase.auth.admin.getUserById(userId);
+  return data?.user?.email || null;
+}
+
 // Fetch user's personal context from profiles table
 async function getUserContext(userId) {
   const { data } = await supabase
     .from('profiles').select('personal_context').eq('id', userId).single();
   return data?.personal_context || {};
+}
+
+// ---------------------------------------------------------------------------
+// Agent CRUD
+// ---------------------------------------------------------------------------
+
+async function createAgent({ name, agent_type, voice, system_prompt }, userId) {
+  const id = genId();
+  const { data, error } = await supabase
+    .from('agents')
+    .insert({ id, user_id: userId, name, agent_type, voice, system_prompt })
+    .select().single();
+  if (error) throw error;
+  return data;
+}
+
+async function listAgents(userId) {
+  const { data, error } = await supabase
+    .from('agents').select('*').eq('user_id', userId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data ?? [];
+}
+
+async function updateAgent(id, userId, fields) {
+  const { data, error } = await supabase
+    .from('agents')
+    .update({ ...fields, updated_at: new Date().toISOString() })
+    .eq('id', id).eq('user_id', userId)
+    .select().single();
+  if (error) throw error;
+  return data;
+}
+
+async function deleteAgent(id, userId) {
+  const { error } = await supabase
+    .from('agents').delete().eq('id', id).eq('user_id', userId);
+  if (error) throw error;
 }
 
 module.exports = {
@@ -134,4 +177,9 @@ module.exports = {
   countActive,
   getTaskByCallSid,
   getUserContext,
+  getUserEmail,
+  createAgent,
+  listAgents,
+  updateAgent,
+  deleteAgent,
 };

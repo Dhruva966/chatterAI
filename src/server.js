@@ -104,16 +104,30 @@ Input: "${request}"`;
 
 app.post('/tasks', requireAuth, async (req, res) => {
   const { request } = req.body;
-  if (!request || typeof request !== 'string') {
-    return res.status(400).json({ error: 'request body must include a "request" string.' });
-  }
 
+  // Batch mode: phone_number provided directly — skip Gemini parsing
   let parsed;
-  try {
-    parsed = await parseTaskWithGemini(request);
-  } catch (err) {
-    logger.error({ err: err.message }, 'Gemini parse failed');
-    return res.status(500).json({ error: 'Failed to parse request with Gemini.', detail: err.message });
+  if (req.body.phone_number) {
+    const desc = req.body.description || request;
+    if (!desc) return res.status(400).json({ error: 'description or request required in batch mode.' });
+    parsed = {
+      phone_number: req.body.phone_number,
+      description: desc,
+      business_query: null,
+      location_hint: req.body.location_hint || null,
+      scheduled_at: req.body.scheduled_at || null,
+      user_context: null,
+    };
+  } else {
+    if (!request || typeof request !== 'string') {
+      return res.status(400).json({ error: 'request body must include a "request" string.' });
+    }
+    try {
+      parsed = await parseTaskWithGemini(request);
+    } catch (err) {
+      logger.error({ err: err.message }, 'Gemini parse failed');
+      return res.status(500).json({ error: 'Failed to parse request with Gemini.', detail: err.message });
+    }
   }
 
   const {
@@ -258,6 +272,54 @@ app.delete('/tasks/:id', requireAuth, async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// Agent CRUD routes
+// ---------------------------------------------------------------------------
+
+app.get('/api/phone-number', requireAuth, (_req, res) => {
+  res.json({ phoneNumber: process.env.TWILIO_PHONE_NUMBER || null });
+});
+
+app.get('/agents', requireAuth, async (req, res) => {
+  try {
+    res.json(await db.listAgents(req.user.id));
+  } catch (err) {
+    logger.error({ err: err.message }, 'listAgents failed');
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/agents', requireAuth, async (req, res) => {
+  const { name, agent_type = 'generic', voice = 'aura-asteria-en', system_prompt } = req.body;
+  if (!name) return res.status(400).json({ error: 'name required' });
+  try {
+    res.json(await db.createAgent({ name, agent_type, voice, system_prompt }, req.user.id));
+  } catch (err) {
+    logger.error({ err: err.message }, 'createAgent failed');
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/agents/:id', requireAuth, async (req, res) => {
+  const { name, agent_type, voice, system_prompt } = req.body;
+  try {
+    res.json(await db.updateAgent(req.params.id, req.user.id, { name, agent_type, voice, system_prompt }));
+  } catch (err) {
+    logger.error({ err: err.message }, 'updateAgent failed');
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/agents/:id', requireAuth, async (req, res) => {
+  try {
+    await db.deleteAgent(req.params.id, req.user.id);
+    res.sendStatus(204);
+  } catch (err) {
+    logger.error({ err: err.message }, 'deleteAgent failed');
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Twilio webhooks — no auth (Twilio calls these, not users)
 // ---------------------------------------------------------------------------
 
@@ -371,6 +433,29 @@ app.ws('/stream', (ws, _req) => {
 
           onMarkComplete: async (result, status = 'completed') => {
             await db.updateTaskStatus(taskId, status, result);
+
+            // N8N post-call webhook — fire-and-forget, never blocks completion
+            const n8nUrl = process.env.N8N_WEBHOOK_URL;
+            if (n8nUrl) {
+              db.getTask(taskId)
+                .then(async completedTask => {
+                  const user_email = await db.getUserEmail(completedTask.user_id).catch(() => null);
+                  return fetch(n8nUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      event: 'call_completed',
+                      task_id: taskId,
+                      status,
+                      result,
+                      user_email,
+                      task: completedTask,
+                    }),
+                  });
+                })
+                .catch(err => logger.warn({ err: err.message }, 'N8N webhook failed — non-fatal'));
+            }
+
             try {
               await hangUp(callSid);
             } catch (err) {

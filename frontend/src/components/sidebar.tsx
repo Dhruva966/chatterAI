@@ -3,39 +3,42 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
-  Phone, Sparkles, Hash, LayoutGrid, History,
-  BarChart3, ShieldCheck, Bell, Settings, Zap,
+  Bot, BookOpen, Phone, Layers, History, MessageSquare,
+  BarChart2, ShieldCheck, Bell, Settings, Zap, PhoneCall,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SignOutButton } from '@/components/sign-out-button'
 
 type SidebarProps = {
-  tasks: { id: string; description: string; status: string }[]
   user: { name: string; email: string; initials: string }
 }
 
-const navSections = [
+type NavItem = { label: string; href: string; icon: React.ElementType }
+type NavSection = { title: string; items: NavItem[] }
+
+const NAV: NavSection[] = [
   {
-    label: 'Build',
+    title: 'BUILD',
     items: [
-      { label: 'My Calls',      href: '/dashboard', icon: Phone,       mock: false },
-      { label: 'Templates',     href: '#',           icon: Sparkles,    mock: true  },
+      { label: 'Agents',         href: '/agents',         icon: Bot },
+      { label: 'Knowledge Base', href: '/knowledge-base', icon: BookOpen },
     ],
   },
   {
-    label: 'Deploy',
+    title: 'DEPLOY',
     items: [
-      { label: 'Phone Numbers', href: '#',    icon: Hash,        mock: true  },
-      { label: 'Batch Calls',   href: '/batch', icon: LayoutGrid, mock: false },
+      { label: 'Phone Numbers', href: '/phone-numbers', icon: Phone },
+      { label: 'Batch Call',    href: '/batch',         icon: Layers },
     ],
   },
   {
-    label: 'Monitor',
+    title: 'MONITOR',
     items: [
-      { label: 'Call History',  href: '/dashboard', icon: History,     mock: false },
-      { label: 'Analytics',     href: '#',           icon: BarChart3,   mock: true  },
-      { label: 'AI Quality',    href: '#',           icon: ShieldCheck, mock: true  },
-      { label: 'Alerting',      href: '#',           icon: Bell,        mock: true  },
+      { label: 'Call History',         href: '/call-history', icon: History },
+      { label: 'Chat History',         href: '/chat-history', icon: MessageSquare },
+      { label: 'Analytics',            href: '/analytics',    icon: BarChart2 },
+      { label: 'AI Quality Assurance', href: '/ai-qa',        icon: ShieldCheck },
+      { label: 'Alerting',             href: '/alerting',     icon: Bell },
     ],
   },
 ]
@@ -45,48 +48,54 @@ export function Sidebar({ user }: SidebarProps) {
 
   return (
     <aside
-      className="w-64 shrink-0 flex flex-col h-full border-r border-sidebar-border"
+      className="w-56 shrink-0 flex flex-col h-full border-r border-sidebar-border"
       style={{ background: 'var(--sidebar)' }}
     >
-      {/* Logo / workspace header */}
-      <div className="px-4 pt-5 pb-4 border-b border-sidebar-border/40">
-        <Link href="/dashboard" className="flex items-center gap-2 group mb-0.5">
+      {/* Logo */}
+      <div className="px-4 pt-5 pb-4">
+        <Link href="/dashboard" className="flex items-center gap-2">
           <Zap className="w-4 h-4 text-primary shrink-0" />
           <span className="text-sm font-bold tracking-tight text-sidebar-foreground">
             Outbound AI
           </span>
         </Link>
-        <p className="text-[10px] text-muted-foreground/50 pl-6 truncate">
-          {user.email}
-        </p>
       </div>
 
-      {/* Navigation sections */}
-      <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-4">
-        {navSections.map((section) => (
-          <div key={section.label}>
-            <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">
-              {section.label}
+      {/* New Call CTA */}
+      <div className="px-3 pb-3">
+        <Link
+          href="/dashboard"
+          className="flex items-center justify-center gap-2 w-full px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
+        >
+          <PhoneCall className="w-3.5 h-3.5 shrink-0" />
+          New Call
+        </Link>
+      </div>
+
+      {/* Nav sections */}
+      <nav className="flex-1 overflow-y-auto px-3 space-y-4 pb-4">
+        {NAV.map((section) => (
+          <div key={section.title}>
+            <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">
+              {section.title}
             </p>
-            <div className="space-y-0.5 mt-0.5">
+            <div className="space-y-0.5">
               {section.items.map((item) => {
+                const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
                 const Icon = item.icon
-                const isActive = !item.mock && pathname === item.href
                 return (
                   <Link
-                    key={item.label}
+                    key={item.href}
                     href={item.href}
                     className={cn(
-                      'flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-sm transition-colors',
+                      'flex items-center gap-2.5 w-full px-2 py-2 rounded-lg text-sm transition-colors',
                       isActive
-                        ? 'bg-primary/10 text-primary font-medium'
-                        : item.mock
-                        ? 'text-muted-foreground/40 hover:text-muted-foreground/60 hover:bg-white/5 cursor-default'
-                        : 'text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-white/5'
+                        ? 'bg-sidebar-accent text-sidebar-foreground font-medium'
+                        : 'text-sidebar-foreground/60 hover:bg-white/5 hover:text-sidebar-foreground'
                     )}
                   >
                     <Icon className="w-3.5 h-3.5 shrink-0" />
-                    {item.label}
+                    <span className="truncate">{item.label}</span>
                   </Link>
                 )
               })}
@@ -95,8 +104,13 @@ export function Sidebar({ user }: SidebarProps) {
         ))}
       </nav>
 
-      {/* Bottom user section */}
-      <div className="border-t border-sidebar-border p-3">
+      {/* Bottom: plan badge + user */}
+      <div className="border-t border-sidebar-border p-3 space-y-3">
+        <div className="px-2">
+          <span className="inline-flex items-center text-[11px] font-medium px-2.5 py-1 rounded-full bg-primary/10 text-primary">
+            Free Trial
+          </span>
+        </div>
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-full bg-primary/20 text-primary text-xs font-bold flex items-center justify-center shrink-0">
             {user.initials}
